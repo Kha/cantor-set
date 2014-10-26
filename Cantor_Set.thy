@@ -72,6 +72,128 @@ qed
 lemma[simp]: "n_ary n f \<Longrightarrow> suminf (n_ary_series n f) \<ge> 0"
   by (rule suminf_nonneg, simp) (auto simp:n_ary_series_def)
 
+subsection {* The n-arity expansion of a real *}
+
+(*
+lemma [fundef_cong]: "n = n' \<Longrightarrow> (\<And> j. j = i' \<Longrightarrow> f j == f' j) \<Longrightarrow> i = i' \<Longrightarrow> n_ary_series n f i = n_ary_series n' f' i'"
+  unfolding n_ary_series_def by simp
+*)
+
+fun to_nary :: "nat \<Rightarrow>  real \<Rightarrow> (nat \<Rightarrow> nat)"
+ where "to_nary n x i = natfloor (x * n^(Suc i)) mod n"
+
+lemma n_ary_to_nary[simp]: "n > 1 \<Longrightarrow> n_ary n (to_nary n x)"
+  unfolding n_ary_def by auto
+
+lemma summable_to_nary[simp]: "n > 1 \<Longrightarrow> summable (n_ary_series n (to_nary n x))"
+  by (metis n_ary_summable n_ary_to_nary)
+
+lemma natfloor_div_nat:
+  assumes "y > 0"
+  shows "natfloor (x / real y) = natfloor x div y"
+proof-
+  have "x \<le> 0 \<or> x \<ge> 0 \<and> x < 1 \<or> 1 \<le> x" by arith
+  thus ?thesis
+  proof(elim conjE disjE)
+    assume *: "1 \<le> x"
+    show ?thesis by (rule Real.natfloor_div_nat[OF * assms])
+  next
+    assume *: "x \<le> 0"
+    moreover
+    from * assms have "x / y \<le> 0" by (simp add: field_simps)
+    ultimately
+    show ?thesis by (simp add: natfloor_neg)
+  next
+    assume *: "x \<ge> 0" "x < 1"
+    hence "natfloor x = 0" by (auto intro: natfloor_eq)
+    moreover
+    from * assms have "x / y \<ge> 0" and "x / y < 1" by (auto simp add: field_simps)
+    hence "natfloor (x/y) = 0" by (auto intro: natfloor_eq)
+    ultimately
+    show ?thesis by simp
+  qed
+qed
+
+lemma natfloor_mod:
+  assumes "n > 1"
+  shows "n * natfloor x + natfloor (n * x) mod n = natfloor (n * x)"
+proof-
+  have "natfloor (n * x) = n * (natfloor (n * x) div n) + natfloor (n * x) mod n"
+    by (metis mod_div_equality2)
+  also have "natfloor (n * x) div n = natfloor (n * x / n)"
+    apply (rule natfloor_div_nat[symmetric])
+    using assms by auto
+  also have "n * x / n = x" using assms by simp
+  finally show ?thesis..
+qed
+
+
+lemma partial_n_ary:
+  assumes [simp]: "n > 1"
+  assumes "0 \<le> x" "x < 1"
+  shows "setsum (n_ary_series n (to_nary n x)) {..<i} = natfloor (x * n^i) / n^i"
+proof (induction i)
+  case 0
+  from assms have "natfloor x = 0" by (auto intro: natfloor_eq)
+  thus ?case by simp
+next
+  case (Suc i)
+    have "setsum (n_ary_series n (to_nary n x)) {..<Suc i}
+      =  setsum (n_ary_series n (to_nary n x)) {..<i} + n_ary_series n (to_nary n x) i"
+     by simp
+   also have "\<dots> = natfloor (x * real n ^ i) / real n ^ i + n_ary_series n (to_nary n x) i"
+     unfolding Suc.IH..
+   also have "\<dots> = natfloor (x * n ^ i) /  n ^ i + (natfloor (x * n ^ Suc i) mod n) / n ^ Suc i"
+     by (simp add: n_ary_series_def field_simps)
+   also have "\<dots> = (n * natfloor (x * n ^ i) + natfloor (n * (x * n ^ i)) mod n) / n ^ Suc i"
+     using `n > 1` by (simp add: field_simps power_Suc)
+   also have "\<dots> = natfloor (n * (x * n^i)) / n^Suc i"
+     unfolding natfloor_mod[OF assms(1)] ..
+   also have "\<dots> = natfloor (x * n^(Suc i)) / n^Suc i" by (simp add: power_Suc field_simps)
+   finally
+   show ?case by (metis power_real_of_nat)
+qed
+
+lemma suminf_n_ary_series_to_nary:
+  assumes [simp]:"n > 1"
+  assumes "0 \<le> x" "x < 1"
+  shows "suminf (n_ary_series n (to_nary n x)) = x"
+proof-
+  have "suminf  (n_ary_series n (to_nary n x)) = lim (\<lambda>i. setsum (n_ary_series n (to_nary n x)) {..<i})"
+    by (rule suminf_eq_lim)
+  also have "\<dots> = lim (\<lambda>i. natfloor (x * n^i) / n^i)"
+    unfolding partial_n_ary[OF assms] by simp
+  also have "\<dots> = x"
+  proof(rule limI)
+    have "(\<lambda>i. x - (natfloor (x * (n ^ i))) / (n ^ i)) ----> 0"
+    proof(rule tendsto_sandwich[OF eventually_sequentiallyI eventually_sequentiallyI])
+      fix i
+      have "natfloor (x * (n^i)) \<le> x * (n^i)" 
+          using assms by (simp add: real_natfloor_le field_simps)
+      thus "0 \<le> x - natfloor (x * (n^i)) / (n^i)" 
+          using assms(1) by (simp add: field_simps)
+    next
+      fix i 
+      have "x * (n^i) - natfloor (x * (n^i)) \<le> 1"
+         by (metis comm_monoid_diff_class.diff_cancel le_natfloor_eq_one less_eq_real_def natfloor_neg natfloor_one natfloor_subtract not_le power_0 power_eq_0_iff)
+      from divide_right_mono[OF this, where c = "n^i"] assms(1)
+      show "x - natfloor (x * (n ^ i)) / (n ^ i) \<le> inverse (n^i)"
+        using assms(1) by (simp add: field_simps )
+    next
+      show "(\<lambda>i. 0) ----> 0" by (rule tendsto_const)
+    next
+      find_theorems "_ ----> 0"
+      from assms(1)
+      have "1 < real n" by simp
+      hence "(\<lambda>i. inverse ((real n) ^ i)) ----> 0" by (rule LIMSEQ_inverse_realpow_zero)
+      thus "(\<lambda>i. inverse (n ^ i)) ----> 0" by simp
+    qed
+    thus "(\<lambda>i. (natfloor (x * (n ^ i))) / (n ^ i)) ----> x"
+      by (rule LIMSEQ_diff_approach_zero2[OF tendsto_const])
+  qed
+  finally show ?thesis.
+qed
+
 subsection {* A bijection between the Cantor Set and a subset of ternary representations *}
 
 abbreviation "cantor_ary f \<equiv> n_ary 3 f \<and> (\<forall>i. f i \<noteq> 1)"
