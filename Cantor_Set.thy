@@ -31,6 +31,8 @@ lemma le_diff_1[simp]: "(n::nat) < m \<Longrightarrow> n \<le> m - 1"
   by (metis Suc_diff_1 Suc_leI le_less_trans not_less zero_less_Suc)
 lemma n_ary_le[simp]: "n_ary n f \<Longrightarrow> f i \<le> n - 1"
   by (rule le_diff_1, auto simp:n_ary_def image_def)
+lemma n_ary_less[simp]: "n_ary n f \<Longrightarrow> f i < n"
+  by (auto simp add: n_ary_def, metis UNIV_I atLeast0LessThan image_eqI lessThan_iff subsetCE)
 
 definition n_ary_series :: "nat \<Rightarrow> (nat \<Rightarrow> nat) \<Rightarrow> nat \<Rightarrow> real" where
   "n_ary_series n f = (\<lambda>k. f k * (1 / n) ^ Suc k)"
@@ -80,9 +82,27 @@ proof (rule summableI_nonneg_bounded[where x="suminf (period_one n)"])
   finally show "setsum (n_ary_series n f) {..<k} \<le> suminf (period_one n)" .
 qed
 
-lemma[simp]: "n_ary n f \<Longrightarrow> suminf (n_ary_series n f) \<ge> 0"
+lemma nary_pos[simp]: "n_ary n f \<Longrightarrow> suminf (n_ary_series n f) \<ge> 0"
   by (rule suminf_nonneg, simp) (auto simp:n_ary_series_def)
 
+lemma nary_le_1[simp]:
+  assumes "n_ary n f"
+  shows "suminf (n_ary_series n f) \<le> 1"
+proof-
+  have "suminf (n_ary_series n f) \<le> suminf (period_one n)"
+  proof (rule suminf_le, rule)
+    fix i
+    from `n_ary n f` have "f i < n" by simp
+    thus "n_ary_series n f i \<le> period_one n i" 
+      unfolding n_ary_series_def period_one_def  by auto
+  next
+    show "summable (n_ary_series n f)" by (rule n_ary_summable[OF assms])
+  next
+    show "summable (period_one n)" by (rule period_one_summable[OF n_ary_n_gt_1[OF assms]])
+  qed
+  also have "\<dots> = 1" by (rule suminf_period_one_1[OF n_ary_n_gt_1[OF assms]])
+  finally show ?thesis.
+qed
 subsection {* The n-arity expansion of a real *}
 
 fun to_nary :: "nat \<Rightarrow>  real \<Rightarrow> (nat \<Rightarrow> nat)"
@@ -506,12 +526,30 @@ proof-
   finally show ?thesis.
 qed
 
-
 lemma cantor_n_eq:  "cantor_n n = to_real` r_cantor_n n"
 proof(induction n)
   case 0 
   have "cantor_n 0  = {0..1}" by simp
-  also have "\<dots> = to_real ` {f. n_ary 3 f}" sorry
+  also have "\<dots> = to_real ` {f. n_ary 3 f}"
+  proof(intro set_eqI iffI)
+    fix x
+    assume "x \<in> to_real ` {f. n_ary 3 f}"
+    then obtain f where "x = to_real f" and "n_ary 3 f" by auto
+    from nary_pos[OF `n_ary 3 f`] nary_le_1[OF `n_ary 3 f`]
+    have "0 \<le> to_real f" and "to_real f \<le> 1" by (simp_all add: to_real_def)
+    thus "x \<in> {0..1}" unfolding `x = to_real f` by auto
+  next
+    fix x :: real
+    assume "x \<in> {0..1}" hence "0 \<le> x" and "x \<le> 1" by auto
+
+    have "x = to_real (to_nary 3 x)"
+      unfolding to_real_def
+      by (rule suminf_n_ary_series_to_nary[OF _ `0 \<le> x` `x \<le> 1`, symmetric]) simp
+    moreover
+    have "n_ary 3 (to_nary 3 x)" by (rule n_ary_to_nary) simp
+    ultimately
+    show "x \<in> to_real ` {f. n_ary 3 f}" by auto
+  qed
   also have "\<dots> = to_real ` r_cantor_n 0" by simp
   finally show ?case.
 next
