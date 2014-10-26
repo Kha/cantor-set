@@ -4,9 +4,12 @@ begin
 
 subsection {* Definition of the Cantor Set *}
 
+definition go_left :: "real \<Rightarrow> real" where "go_left x = x/3"
+definition go_right :: "real \<Rightarrow> real" where "go_right x = 2/3 + x/3"
+
 fun cantor_n where
   "cantor_n 0 = {0::real..1}"
-| "cantor_n (Suc n) = (\<lambda>x. x/3) ` cantor_n n \<union> (\<lambda>x. 2/3 + x/3) ` cantor_n n"
+| "cantor_n (Suc n) = go_left ` cantor_n n \<union> go_right ` cantor_n n"
 definition "cantor \<equiv> \<Inter>range cantor_n"
 
 lemma cantor_bounds:
@@ -81,11 +84,7 @@ lemma[simp]: "n_ary n f \<Longrightarrow> suminf (n_ary_series n f) \<ge> 0"
   by (rule suminf_nonneg, simp) (auto simp:n_ary_series_def)
 
 subsection {* The n-arity expansion of a real *}
-(*
-text {* We want {@text "natfloor' 3 = 2"} *}
-definition natfloor' :: "real \<Rightarrow> nat"
-  where "natfloor' x = (if x > 0 \<and> real (natfloor x) = x then natfloor x - 1 else natfloor x)"
-*)
+
 fun to_nary :: "nat \<Rightarrow>  real \<Rightarrow> (nat \<Rightarrow> nat)"
  where "to_nary n x i = (if x = 1 then n - 1 else natfloor (x * n^(Suc i)) mod n)"
 
@@ -209,10 +208,30 @@ next
     by simp
 qed
 
+subsection {* A cantor-like set on the representations *}
+
+definition r_go_left :: "(nat \<Rightarrow> nat) \<Rightarrow> (nat \<Rightarrow> nat)"
+  where "r_go_left f = (\<lambda> i. if i = 0 then 0 else f (i - 1))" 
+definition r_go_right :: "(nat \<Rightarrow> nat) \<Rightarrow> (nat \<Rightarrow> nat)"
+  where "r_go_right f= (\<lambda> i. if i = 0 then 2 else f (i - 1))" 
+
+fun r_cantor_n where
+  "r_cantor_n 0 = {f . n_ary 3 f}"
+| "r_cantor_n (Suc n) = r_go_left ` r_cantor_n n \<union> r_go_right ` r_cantor_n n"
+definition "r_cantor \<equiv> \<Inter>range r_cantor_n"
 
 subsection {* A bijection between the Cantor Set and a subset of ternary representations *}
 
 abbreviation "cantor_ary f \<equiv> n_ary 3 f \<and> (\<forall>i. f i \<noteq> 1)"
+
+lemma cantor_aryI:
+  assumes "\<And> i. f i \<in> {0,2}"
+  shows "cantor_ary f"
+  using assms
+  apply (auto simp add: n_ary_def)
+  apply (metis Suc_le_eq eval_nat_numeral(3) order_refl zero_less_numeral)
+  apply (metis (no_types) Suc_1 n_not_Suc_n numeral_1_eq_Suc_0 numeral_One)
+  done
  
 lemma cantor_aryE:
   assumes "cantor_ary f"
@@ -341,5 +360,185 @@ oops
 
 theorem "bij_betw (suminf \<circ> n_ary_series 3) {f. cantor_ary f} cantor"
 oops
+
+subsection {* Alternative approach *}
+
+lemma "f \<in> r_cantor \<longleftrightarrow> cantor_ary f"
+proof
+  fix f
+  assume "f \<in> r_cantor"
+  { fix n
+    from `f \<in> r_cantor`
+    have "f \<in> r_cantor_n n" by (simp add: r_cantor_def)
+    hence "\<forall>i<n. f i \<in> {0,2}"
+    proof(induction n arbitrary: f)
+      case (Suc n)
+      hence "f \<in> r_go_left ` r_cantor_n n \<or> f \<in> r_go_right ` r_cantor_n n" by simp
+      then obtain f' where "f' \<in> r_cantor_n n" and "f = r_go_left f' \<or> f = r_go_right f'" by auto
+      from Suc.IH[OF this(1)]
+      have "\<forall>i<n. f' i \<in> {0, 2}".
+      hence "\<forall>i<n. f (Suc i) \<in> {0, 2}"
+        using `f = _ \<or> f = _`
+        by (auto simp add:  r_go_left_def   r_go_right_def)
+      moreover
+      have "f 0 \<in> {0, 2}"
+        using `f = _ \<or> f = _`
+        by (auto simp add:  r_go_left_def   r_go_right_def)
+      ultimately
+      show ?case by (metis less_Suc_eq_0_disj)
+    qed simp
+   }
+   hence "\<forall>i. f i \<in> {0,2}" by auto
+   thus "cantor_ary f" by -(rule cantor_aryI, simp)
+next
+  fix f
+  assume "cantor_ary f"
+  { fix n
+    from `cantor_ary f`
+    have "f \<in> r_cantor_n n"
+    proof(induction n arbitrary: f)
+    case 0
+      from `cantor_ary f`
+      have "n_ary 3 f" by simp
+      thus "f \<in> r_cantor_n 0" by simp
+    next
+    case (Suc n)
+      from cantor_aryE[OF `cantor_ary f`, where i = 0]
+      have "f 0 = 0 \<or> f 0 = 2" by simp
+      hence "f = r_go_left (\<lambda> i. f (Suc i)) \<or> f =  r_go_right (\<lambda> i. f (Suc i))"
+        by (auto simp add:  r_go_left_def   r_go_right_def)
+      moreover
+      from `cantor_ary f`
+      have "cantor_ary (\<lambda> i. f (Suc i))" by (auto simp add: n_ary_def)
+      hence "(\<lambda> i. f (Suc i)) \<in> r_cantor_n n" by (rule Suc.IH)
+      ultimately
+      show "f \<in> r_cantor_n (Suc n)" by auto
+    qed
+  }
+  thus "f \<in> r_cantor" by (simp add: r_cantor_def)
+qed
+
+definition to_real :: "(nat \<Rightarrow> nat) \<Rightarrow> real"
+  where "to_real f = suminf (n_ary_series 3 f)"
+
+lemma n_ary_series_div[simp]: "n_ary_series n f i / n = n_ary_series n (\<lambda> i. f (i - 1)) (Suc i)"
+  unfolding n_ary_series_def
+  by (simp add: power_Suc)
+
+lemma suminf_split_first:
+  assumes "summable (f :: nat \<Rightarrow> real)"
+  shows "suminf f = (\<Sum>n. f (Suc n)) + f 0"
+  using suminf_split_initial_segment[OF assms, of 1]
+  by simp
+
+lemma summable_shift:
+  assumes "summable (f :: nat \<Rightarrow> real)"
+  shows "summable (\<lambda>i. if i = 0 then x else f i)"
+  sorry
+  
+lemma suminf_shift:
+  assumes "summable (f :: nat \<Rightarrow> real)"
+  shows "x + (\<Sum>i. f (Suc i)) = (\<Sum>i. if i = 0 then x else f i)"
+  by (simp add: suminf_split_first[OF summable_shift[OF assms]])
+
+lemma n_ary_go_left[simp]: "n_ary 3 f \<Longrightarrow> n_ary 3 (r_go_left f)"
+  by (auto simp add: n_ary_def r_go_left_def)
+lemma n_ary_go_right[simp]: "n_ary 3 f \<Longrightarrow> n_ary 3 (r_go_right f)"
+  by (auto simp add: n_ary_def r_go_right_def)
+
+lemma r_cantor_n_n_ary[simp]: "f \<in> r_cantor_n n \<Longrightarrow>  n_ary 3 f"
+  by (induction n arbitrary: f) auto
+
+lemma to_real_go_right[simp]:
+  assumes "n_ary 3 f"
+  shows "go_right (to_real f) = to_real (r_go_right f)"
+proof-
+  from assms
+  have "summable (n_ary_series 3 f)" by (metis n_ary_summable)
+  from assms
+  have "n_ary 3 (\<lambda>i. f (i - 1))" by (auto simp add: n_ary_def)
+  hence "summable (n_ary_series 3 (\<lambda>i. f (i - 1)))" by (metis n_ary_summable)
+
+  have "go_right (to_real f) = 2/3 + to_real f / 3" by (simp add: go_right_def)
+  also have "\<dots> = 2/3 + (\<Sum>i. n_ary_series 3 f i) / 3" by (simp add: to_real_def)
+  also have "\<dots> = 2/3 + (\<Sum>i. n_ary_series 3 f i / 3)" by (rule arg_cong[OF suminf_divide[symmetric]]) fact
+  also have "\<dots> = 2/3 + (\<Sum>i. n_ary_series 3 (\<lambda> i. f (i - 1)) (Suc i))"
+    by (metis n_ary_series_div real_of_nat_numeral)
+  also have "\<dots> = (\<Sum>i. if i = 0 then 2/3 else n_ary_series 3 (\<lambda> i. f (i - 1)) i)"
+    by (rule suminf_shift) fact
+  also have "\<dots> = (\<Sum>i. n_ary_series 3 (\<lambda> i. if i = 0 then 2 else f (i - 1)) i)"
+    by (rule arg_cong[where f = suminf]) (auto simp add: n_ary_series_def power_Suc)
+  also have "\<dots> = (\<Sum>i. n_ary_series 3 (r_go_right f) i)"
+    by (simp add: r_go_right_def)
+  also have "\<dots> = to_real (r_go_right f)"
+    by (simp add: to_real_def)
+  finally show ?thesis.
+qed
+
+
+lemma to_real_go_left[simp]:
+  assumes "n_ary 3 f"
+  shows "go_left (to_real f) = to_real (r_go_left f)"
+proof-
+  from assms
+  have "summable (n_ary_series 3 f)" by (metis n_ary_summable)
+  from assms
+  have "n_ary 3 (\<lambda>i. f (i - 1))" by (auto simp add: n_ary_def)
+  hence "summable (n_ary_series 3 (\<lambda>i. f (i - 1)))" by (metis n_ary_summable)
+
+  have "go_left (to_real f) = to_real f / 3" by (simp add: go_left_def)
+  also have "\<dots> = (\<Sum>i. n_ary_series 3 f i) / 3" by (simp add: to_real_def)
+  also have "\<dots> = (\<Sum>i. n_ary_series 3 f i / 3)" by (rule suminf_divide[symmetric]) fact
+  also have "\<dots> = (\<Sum>i. n_ary_series 3 (\<lambda> i. f (i - 1)) (Suc i))"
+    by (metis n_ary_series_div real_of_nat_numeral)
+  also have "\<dots> = 0 + (\<Sum>i. n_ary_series 3 (\<lambda> i. f (i - 1)) (Suc i))"
+    by simp
+  also have "\<dots> = (\<Sum>i. if i = 0 then 0 else n_ary_series 3 (\<lambda> i. f (i - 1)) i)"
+    by (rule suminf_shift) fact
+  also have "\<dots> = (\<Sum>i. n_ary_series 3 (\<lambda> i. if i = 0 then 0 else f (i - 1)) i)"
+    by (rule arg_cong[where f = suminf])  (auto simp add: n_ary_series_def)
+  also have "\<dots> = (\<Sum>i. n_ary_series 3 (r_go_left f) i)"
+    by (simp add: r_go_left_def)
+  also have "\<dots> = to_real (r_go_left f)"
+    by (simp add: to_real_def)
+  finally show ?thesis.
+qed
+
+
+lemma cantor_n_eq:  "cantor_n n = to_real` r_cantor_n n"
+proof(induction n)
+  case 0 
+  have "cantor_n 0  = {0..1}" by simp
+  also have "\<dots> = to_real ` {f. n_ary 3 f}" sorry
+  also have "\<dots> = to_real ` r_cantor_n 0" by simp
+  finally show ?case.
+next
+  case (Suc n)
+  have "cantor_n (Suc n) = go_left ` cantor_n n \<union> go_right ` cantor_n n" by simp
+  also have "\<dots> = go_left ` (to_real ` r_cantor_n n) \<union> go_right ` (to_real ` r_cantor_n n)"
+    unfolding Suc.IH..
+  also have "\<dots> = to_real ` r_go_left ` r_cantor_n n \<union> to_real ` r_go_right ` r_cantor_n n"
+    by (simp add: image_image cong: image_cong)
+  also have "\<dots> = to_real ` (r_go_left ` r_cantor_n n \<union> r_go_right ` r_cantor_n n)" by auto
+  also have "\<dots> = to_real ` (r_cantor_n (Suc n))" by simp
+  finally show ?case.
+qed
+
+theorem "cantor = to_real ` r_cantor"
+proof
+  show "to_real` r_cantor \<subseteq> cantor"
+  unfolding cantor_def r_cantor_def
+  by (auto simp add: cantor_n_eq)
+next
+  show "cantor \<subseteq> to_real ` r_cantor"
+  proof
+    fix x
+    assume "x \<in> cantor"
+    have "\<exists> f. f \<in> r_cantor \<and> x = to_real f" sorry
+    thus "x \<in> to_real ` r_cantor" by auto
+  qed
+qed
+
+
 
 end
