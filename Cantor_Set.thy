@@ -9,6 +9,14 @@ fun cantor_n where
 | "cantor_n (Suc n) = (\<lambda>x. x/3) ` cantor_n n \<union> (\<lambda>x. 2/3 + x/3) ` cantor_n n"
 definition "cantor \<equiv> \<Inter>range cantor_n"
 
+lemma cantor_bounds:
+  assumes "x \<in> cantor"
+  shows "0 \<le> x \<and> x \<le> 1"
+proof-
+  from assms have "x \<in> cantor_n 0" by (auto simp add: cantor_def simp del: cantor_n.simps)
+  thus ?thesis by simp
+qed
+
 subsection {* Representing reals from [0,1] to base n *}
 
 definition n_ary :: "nat \<Rightarrow> (nat \<Rightarrow> nat) \<Rightarrow> bool" where
@@ -43,7 +51,7 @@ definition "period_one n \<equiv> n_ary_series n (\<lambda>_. n - 1)"
 lemma period_one_summable[simp]: "n > 1 \<Longrightarrow> summable (period_one n)"
   by (auto simp:n_ary_series_def period_one_def intro!:summable_geometric' summable_mult)
 
-lemma[simp]: "n > 1 \<Longrightarrow> suminf (period_one n) = 1"
+lemma suminf_period_one_1[simp]: "n > 1 \<Longrightarrow> suminf (period_one n) = 1"
   unfolding period_one_def n_ary_series_def
   apply (subst suminf_mult)
   apply (rule summable_geometric')
@@ -73,14 +81,13 @@ lemma[simp]: "n_ary n f \<Longrightarrow> suminf (n_ary_series n f) \<ge> 0"
   by (rule suminf_nonneg, simp) (auto simp:n_ary_series_def)
 
 subsection {* The n-arity expansion of a real *}
-
 (*
-lemma [fundef_cong]: "n = n' \<Longrightarrow> (\<And> j. j = i' \<Longrightarrow> f j == f' j) \<Longrightarrow> i = i' \<Longrightarrow> n_ary_series n f i = n_ary_series n' f' i'"
-  unfolding n_ary_series_def by simp
+text {* We want {@text "natfloor' 3 = 2"} *}
+definition natfloor' :: "real \<Rightarrow> nat"
+  where "natfloor' x = (if x > 0 \<and> real (natfloor x) = x then natfloor x - 1 else natfloor x)"
 *)
-
 fun to_nary :: "nat \<Rightarrow>  real \<Rightarrow> (nat \<Rightarrow> nat)"
- where "to_nary n x i = natfloor (x * n^(Suc i)) mod n"
+ where "to_nary n x i = (if x = 1 then n - 1 else natfloor (x * n^(Suc i)) mod n)"
 
 lemma n_ary_to_nary[simp]: "n > 1 \<Longrightarrow> n_ary n (to_nary n x)"
   unfolding n_ary_def by auto
@@ -144,7 +151,7 @@ next
    also have "\<dots> = natfloor (x * real n ^ i) / real n ^ i + n_ary_series n (to_nary n x) i"
      unfolding Suc.IH..
    also have "\<dots> = natfloor (x * n ^ i) /  n ^ i + (natfloor (x * n ^ Suc i) mod n) / n ^ Suc i"
-     by (simp add: n_ary_series_def field_simps)
+     using assms(3) by (simp add: n_ary_series_def field_simps)
    also have "\<dots> = (n * natfloor (x * n ^ i) + natfloor (n * (x * n ^ i)) mod n) / n ^ Suc i"
      using `n > 1` by (simp add: field_simps power_Suc)
    also have "\<dots> = natfloor (n * (x * n^i)) / n^Suc i"
@@ -156,13 +163,15 @@ qed
 
 lemma suminf_n_ary_series_to_nary:
   assumes [simp]:"n > 1"
-  assumes "0 \<le> x" "x < 1"
+  assumes "0 \<le> x" "x \<le>1"
   shows "suminf (n_ary_series n (to_nary n x)) = x"
-proof-
-  have "suminf  (n_ary_series n (to_nary n x)) = lim (\<lambda>i. setsum (n_ary_series n (to_nary n x)) {..<i})"
+proof(cases "x = 1")
+  case False with assms(3) have "x < 1" by simp
+
+  have "suminf (n_ary_series n (to_nary n x)) = lim (\<lambda>i. setsum (n_ary_series n (to_nary n x)) {..<i})"
     by (rule suminf_eq_lim)
   also have "\<dots> = lim (\<lambda>i. natfloor (x * n^i) / n^i)"
-    unfolding partial_n_ary[OF assms] by simp
+    unfolding partial_n_ary[OF assms(1,2) `x < 1`] by simp
   also have "\<dots> = x"
   proof(rule limI)
     have "(\<lambda>i. x - (natfloor (x * (n ^ i))) / (n ^ i)) ----> 0"
@@ -192,7 +201,14 @@ proof-
       by (rule LIMSEQ_diff_approach_zero2[OF tendsto_const])
   qed
   finally show ?thesis.
+next
+  case True
+  hence "to_nary n x = (\<lambda>i. n - 1)" by auto
+  thus ?thesis
+    using True suminf_period_one_1[OF assms(1), unfolded period_one_def]
+    by simp
 qed
+
 
 subsection {* A bijection between the Cantor Set and a subset of ternary representations *}
 
@@ -299,6 +315,28 @@ next
 oops
 
 lemma "cantor = (suminf \<circ> n_ary_series 3) ` {f. cantor_ary f}"
+find_theorems "_ \<Longrightarrow> _ : _ ` _"
+proof(intro set_eqI iffI)
+  fix x
+  assume "x \<in> cantor"
+
+  have "cantor_ary (to_nary 3 x)" sorry
+  moreover
+  from `x \<in> cantor` have "1 < (3::nat)" and  "0 \<le> x" and "x \<le> 1"
+    by (auto dest: cantor_bounds)
+  hence "x = suminf (n_ary_series 3 (to_nary 3 x))" by (rule suminf_n_ary_series_to_nary[symmetric])
+  ultimately
+  show "x \<in> (suminf \<circ> n_ary_series 3) ` {f. cantor_ary f}" by auto
+next
+  fix x 
+  assume "x \<in> (suminf \<circ> n_ary_series 3) ` {f. cantor_ary f}"
+  then obtain f where "x = suminf (n_ary_series 3 f)" and "cantor_ary f" by auto
+  {
+  fix n
+  have "x \<in> cantor_n n"
+
+  
+  
 oops
 
 theorem "bij_betw (suminf \<circ> n_ary_series 3) {f. cantor_ary f} cantor"
