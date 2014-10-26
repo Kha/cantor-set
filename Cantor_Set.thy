@@ -241,11 +241,15 @@ proof-
   thus ?thesis by auto
 qed
 
-lemma cantor_ary_inj_aux:
+definition to_real :: "(nat \<Rightarrow> nat) \<Rightarrow> real"
+  where "to_real f = suminf (n_ary_series 3 f)"
+
+
+lemma to_real_inj_aux:
   assumes a: "cantor_ary a"
   assumes b: "cantor_ary b"
   assumes ord: "a i < b i" "\<forall>j<i. a j = b j"
-  assumes eq: "suminf (n_ary_series 3 a) = suminf (n_ary_series 3 b)"
+  assumes eq: "to_real a = to_real b"
   shows False
 proof-
   have[simp]: "n_ary 3 a" "n_ary 3 b" using a b by simp_all
@@ -280,16 +284,16 @@ proof-
     have 1: "setsum (n_ary_series 3 a) {..<i} = setsum (n_ary_series 3 b) {..<i}" using ord(2) by (auto simp:n_ary_series_def)
     show ?thesis by (subst 1) (rule suminf_split_initial_segment[symmetric], simp)
   qed
-  finally show False using eq by auto
+  finally show False using eq to_real_def by auto
 qed
 
 lemma ex_least: "P (n::nat) \<Longrightarrow> \<exists>m. P m \<and> (\<forall>i<m. \<not>P i)"
   by (metis ex_least_nat_le not_less0)
 
-lemma cantor_ary_inj: "inj_on (suminf \<circ> n_ary_series 3) {f. cantor_ary f}"
+lemma cantor_ary_inj: "inj_on to_real {f. cantor_ary f}"
 proof (rule inj_onI, simp del:One_nat_def)
   fix a b
-  assume asms: "cantor_ary a" "cantor_ary b" "suminf (n_ary_series 3 a) = suminf (n_ary_series 3 b)"
+  assume asms: "cantor_ary a" "cantor_ary b" "to_real a = to_real b"
 
   show "a = b"
   proof (rule ccontr)
@@ -299,11 +303,11 @@ proof (rule inj_onI, simp del:One_nat_def)
     show False
     proof (cases "a i < b i")
       case True
-      thus ?thesis using asms i(2) by - (rule cantor_ary_inj_aux)
+      thus ?thesis using asms i(2) by - (rule to_real_inj_aux)
     next
       case False
       with i(1) have "b i < a i" by auto
-      thus ?thesis using asms i(2) by - (rule cantor_ary_inj_aux[OF asms(2,1)], auto)
+      thus ?thesis using asms i(2) by - (rule to_real_inj_aux[OF asms(2,1)], auto)
     qed
   qed
 qed
@@ -417,9 +421,6 @@ next
   }
   thus "f \<in> r_cantor" by (simp add: r_cantor_def)
 qed
-
-definition to_real :: "(nat \<Rightarrow> nat) \<Rightarrow> real"
-  where "to_real f = suminf (n_ary_series 3 f)"
 
 lemma n_ary_series_div[simp]: "n_ary_series n f i / n = n_ary_series n (\<lambda> i. f (i - 1)) (Suc i)"
   unfolding n_ary_series_def
