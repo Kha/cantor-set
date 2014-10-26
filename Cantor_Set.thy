@@ -432,15 +432,16 @@ lemma suminf_split_first:
   using suminf_split_initial_segment[OF assms, of 1]
   by simp
 
-lemma summable_shift:
+lemma summable_changed:
   assumes "summable (f :: nat \<Rightarrow> real)"
   shows "summable (\<lambda>i. if i = 0 then x else f i)"
-  sorry
+using assms summable_iff_shift[where k = 1 and f = f] summable_iff_shift[where k = 1 and f = " (\<lambda>i. if i = 0 then x else f i)"] 
+by simp
   
 lemma suminf_shift:
   assumes "summable (f :: nat \<Rightarrow> real)"
   shows "x + (\<Sum>i. f (Suc i)) = (\<Sum>i. if i = 0 then x else f i)"
-  by (simp add: suminf_split_first[OF summable_shift[OF assms]])
+  by (simp add: suminf_split_first[OF summable_changed[OF assms]])
 
 lemma n_ary_go_left[simp]: "n_ary 3 f \<Longrightarrow> n_ary 3 (r_go_left f)"
   by (auto simp add: n_ary_def r_go_left_def)
