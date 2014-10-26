@@ -262,7 +262,7 @@ proof-
 qed
 
 definition to_real :: "(nat \<Rightarrow> nat) \<Rightarrow> real"
-  where "to_real f = suminf (n_ary_series 3 f)"
+  where "to_real = (\<lambda> f. suminf (n_ary_series 3 f))"
 
 
 lemma to_real_inj_aux:
@@ -304,7 +304,7 @@ proof-
     have 1: "setsum (n_ary_series 3 a) {..<i} = setsum (n_ary_series 3 b) {..<i}" using ord(2) by (auto simp:n_ary_series_def)
     show ?thesis by (subst 1) (rule suminf_split_initial_segment[symmetric], simp)
   qed
-  finally show False using eq to_real_def by auto
+  finally show False using eq  by (auto simp add: to_real_def)
 qed
 
 lemma ex_least: "P (n::nat) \<Longrightarrow> \<exists>m. P m \<and> (\<forall>i<m. \<not>P i)"
@@ -526,30 +526,36 @@ proof-
   finally show ?thesis.
 qed
 
+(* This is basically the main theorem, for a simpler set :-) *)
+lemma interval_covered:
+  assumes "n > 1"
+  shows "{0..1} = (\<lambda> f. suminf (n_ary_series n f)) ` {f. n_ary n f}"
+proof(intro set_eqI iffI)
+  fix x
+  assume "x \<in> (\<lambda> f. suminf (n_ary_series n f)) ` {f. n_ary n f}"
+  then obtain f where "x = suminf (n_ary_series n f)" and "n_ary n f" by auto
+  from nary_pos[OF `n_ary n f`] nary_le_1[OF `n_ary n f`]
+  have "0 \<le> suminf (n_ary_series n f)" and "suminf (n_ary_series n f) \<le> 1" by (simp_all add: to_real_def)
+  thus "x \<in> {0..1}" unfolding `x = suminf (n_ary_series n f)` by auto
+next
+  fix x :: real
+  assume "x \<in> {0..1}" hence "0 \<le> x" and "x \<le> 1" by auto
+
+  have "x = suminf (n_ary_series n (to_nary n x))"
+    unfolding to_real_def
+    by (rule suminf_n_ary_series_to_nary[OF assms `0 \<le> x` `x \<le> 1`, symmetric])
+  moreover
+  have "n_ary n (to_nary n x)" by (rule n_ary_to_nary[OF assms])
+  ultimately
+  show "x \<in>  (\<lambda> f. suminf (n_ary_series n f)) ` {f. n_ary n f}" by auto
+qed
+
 lemma cantor_n_eq:  "cantor_n n = to_real` r_cantor_n n"
 proof(induction n)
   case 0 
   have "cantor_n 0  = {0..1}" by simp
-  also have "\<dots> = to_real ` {f. n_ary 3 f}"
-  proof(intro set_eqI iffI)
-    fix x
-    assume "x \<in> to_real ` {f. n_ary 3 f}"
-    then obtain f where "x = to_real f" and "n_ary 3 f" by auto
-    from nary_pos[OF `n_ary 3 f`] nary_le_1[OF `n_ary 3 f`]
-    have "0 \<le> to_real f" and "to_real f \<le> 1" by (simp_all add: to_real_def)
-    thus "x \<in> {0..1}" unfolding `x = to_real f` by auto
-  next
-    fix x :: real
-    assume "x \<in> {0..1}" hence "0 \<le> x" and "x \<le> 1" by auto
-
-    have "x = to_real (to_nary 3 x)"
-      unfolding to_real_def
-      by (rule suminf_n_ary_series_to_nary[OF _ `0 \<le> x` `x \<le> 1`, symmetric]) simp
-    moreover
-    have "n_ary 3 (to_nary 3 x)" by (rule n_ary_to_nary) simp
-    ultimately
-    show "x \<in> to_real ` {f. n_ary 3 f}" by auto
-  qed
+  also have "\<dots> = to_real ` {f. n_ary 3 f}" 
+    unfolding to_real_def by (rule interval_ternary) simp
   also have "\<dots> = to_real ` r_cantor_n 0" by simp
   finally show ?case.
 next
