@@ -498,6 +498,10 @@ proof-
   finally show ?thesis.
 qed
 
+lemma r_cantor_cantor_ary':"r_cantor = {f . cantor_ary f}"
+  using r_cantor_cantor_ary by auto
+
+
 lemma n_ary_series_div[simp]: "n_ary_series n f i / n = n_ary_series n (\<lambda> i. f (i - 1)) (Suc i)"
   unfolding n_ary_series_def
   by (simp add: power_Suc)
@@ -700,7 +704,7 @@ proof-
   finally show ?thesis.
 qed
 
-theorem "cantor = to_real ` r_cantor"
+theorem to_real_surj: "cantor = to_real ` r_cantor"
 proof
   show "to_real` r_cantor \<subseteq> cantor"
   unfolding cantor_def r_cantor_def
@@ -759,7 +763,9 @@ next
 qed
 
 theorem "bij_betw to_real {f. cantor_ary f} cantor"
-sledgehammer
-
+  apply (rule bij_betw_imageI)
+  apply (rule cantor_ary_inj)
+  apply (rule to_real_surj[symmetric, unfolded r_cantor_cantor_ary'])
+  done
 
 end
