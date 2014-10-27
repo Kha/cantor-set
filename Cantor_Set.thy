@@ -266,15 +266,14 @@ definition to_real :: "(nat \<Rightarrow> nat) \<Rightarrow> real"
 
 
 lemma to_real_inj_aux:
-  assumes a: "cantor_ary a"
-  assumes b: "cantor_ary b"
+  assumes [simp]: "n_ary 3 a"
+  assumes [simp]: "n_ary 3 b"
+  assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
   assumes ord: "a i < b i" "\<forall>j<i. a j = b j"
   assumes eq: "to_real a = to_real b"
   shows False
 proof-
-  have[simp]: "n_ary 3 a" "n_ary 3 b" using a b by simp_all
-  have[simp]: "a i = 0" "b i = 2"
-    using cantor_aryE[OF a, of i] cantor_aryE[OF b, of i] ord(1) by auto
+  have[simp]: "a i = 0" "b i = 2" using ord(1) cantor_at_i by auto
   have[simp]: "n_ary_series 3 b i = 2 * (1/3) ^ Suc i" by (auto simp:n_ary_series_def)
 
   note summable_ignore_initial_segment[simp]
@@ -287,7 +286,7 @@ proof-
   also have "... \<le> (\<Sum>n. period_one 3 (n + Suc i))"
   proof-
     have "\<And>i. a i \<le> 2"
-      using a by (metis One_nat_def diff_Suc_Suc diff_zero eval_nat_numeral(3) n_ary_le)
+      using `n_ary 3 a` by (metis One_nat_def diff_Suc_Suc diff_zero eval_nat_numeral(3) n_ary_le)
     hence "\<And>i. real (a i) \<le> 2"
       by (metis antisym_conv linear natceiling_le_eq natceiling_numeral_eq real_of_nat_numeral) (* ok... *)
     thus ?thesis by - (rule suminf_le, simp add:n_ary_series_def period_one_def, simp_all)
@@ -307,6 +306,32 @@ proof-
   finally show False using eq  by (auto simp add: to_real_def)
 qed
 
+lemma to_real_inj_aux':
+  assumes [simp]: "n_ary 3 a"
+  assumes [simp]: "n_ary 3 b"
+  assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
+  assumes ne: "a i \<noteq> b i" "\<forall>j<i. a j = b j"
+  assumes eq: "to_real a = to_real b"
+  shows False
+proof-
+  from ne
+  have "a i < b i \<or> b i < a i" by auto
+  thus ?thesis
+  proof
+    assume *: "a i < b i"
+    show False by (rule to_real_inj_aux[OF assms(1,2,3,4) * assms(6,7)])
+  next
+    assume *: "b i < a i"
+    moreover
+    from ne(2) have "\<forall>j<i. b j = a j" by auto
+    moreover
+    note eq[symmetric]
+    ultimately
+    show False by (rule  to_real_inj_aux[OF assms(2,1,4,3)])
+  qed
+qed
+
+
 lemma ex_least: "P (n::nat) \<Longrightarrow> \<exists>m. P m \<and> (\<forall>i<m. \<not>P i)"
   by (metis ex_least_nat_le not_less0)
 
@@ -319,16 +344,13 @@ proof (rule inj_onI, simp del:One_nat_def)
   proof (rule ccontr)
     assume "a \<noteq> b"
     then obtain i where "a i \<noteq> b i" by auto
-    from ex_least[of "\<lambda>j. a j \<noteq> b j", OF this] obtain i where i: "a i \<noteq> b i" "\<forall>j<i. a j = b j" by auto
-    show False
-    proof (cases "a i < b i")
-      case True
-      thus ?thesis using asms i(2) by - (rule to_real_inj_aux)
-    next
-      case False
-      with i(1) have "b i < a i" by auto
-      thus ?thesis using asms i(2) by - (rule to_real_inj_aux[OF asms(2,1)], auto)
-    qed
+
+    from ex_least[of "\<lambda>j. a j \<noteq> b j", OF this]
+    obtain i where i: "a i \<noteq> b i" "\<forall>j<i. a j = b j" by auto
+
+    from asms have "n_ary 3 a" "n_ary 3 b" by auto
+    from this cantor_aryE[OF asms(1)] cantor_aryE[OF asms(2)] i asms(3)
+    show False by (rule to_real_inj_aux')
   qed
 qed
 
