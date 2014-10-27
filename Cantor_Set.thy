@@ -577,7 +577,7 @@ proof(induction n)
   case 0 
   have "cantor_n 0  = {0..1}" by simp
   also have "\<dots> = to_real ` {f. n_ary 3 f}" 
-    unfolding to_real_def by (rule interval_ternary) simp
+    unfolding to_real_def by (rule interval_covered) simp
   also have "\<dots> = to_real ` r_cantor_n 0" by simp
   finally show ?case.
 next
