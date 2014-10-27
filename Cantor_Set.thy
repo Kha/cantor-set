@@ -603,17 +603,8 @@ next
   finally show ?case.
 qed
 
-lemma "n \<le> m \<Longrightarrow> r_cantor_n m \<subseteq> r_cantor_n n"
-proof (induction rule: dec_induct)
-  print_cases
-  case base thus ?case..
-next
-  case (step m)
-  have "r_cantor_n (Suc m) \<subseteq> r_cantor_n m"
-    apply simp
-  also have "\<dots> \<subseteq>  r_cantor_n n" by fact
-  finally show ?case.
-qed
+lemma r_cantor_n_mono: "n \<le> m \<Longrightarrow> r_cantor_n m \<subseteq> r_cantor_n n"
+  by (auto simp add: r_cantor_n_cantor_ary)
 
 lemma r_cantor_n_same_prefix:
   assumes "a \<in> r_cantor_n n" "b \<in> r_cantor_n n"
@@ -628,10 +619,11 @@ next
   have "n_ary 3 a" and "n_ary 3 b" by (metis r_cantor_n_n_ary)+
   moreover
   from `a \<in> r_cantor_n (Suc n)` `b \<in> r_cantor_n (Suc n)`
-  have "a n \<in> {0,2}" and "b n \<in> {0,2}" sorry
+  have "a n \<in> {0,2}" and "b n \<in> {0,2}" unfolding r_cantor_n_cantor_ary by auto
   moreover
   from  `a \<in> r_cantor_n (Suc n)` `b \<in> r_cantor_n (Suc n)`
-  have "a \<in> r_cantor_n n" and "b \<in> r_cantor_n n" sorry
+  have "a \<in> r_cantor_n n" and "b \<in> r_cantor_n n"
+    using r_cantor_n_mono[where n = n and m = "Suc n"] by auto
   hence "\<forall>j<n. a j = b j" by (rule Suc.IH)
   moreover
   note eq
