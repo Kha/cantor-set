@@ -307,8 +307,8 @@ proof-
 qed
 
 lemma to_real_inj_aux':
-  assumes [simp]: "n_ary 3 a"
-  assumes [simp]: "n_ary 3 b"
+  assumes "n_ary 3 a"
+  assumes "n_ary 3 b"
   assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
   assumes ne: "a i \<noteq> b i" "\<forall>j<i. a j = b j"
   assumes eq: "to_real a = to_real b"
@@ -330,6 +330,15 @@ proof-
     show False by (rule  to_real_inj_aux[OF assms(2,1,4,3)])
   qed
 qed
+
+lemma to_real_inj_next:
+  assumes "n_ary 3 a" "n_ary 3 b"
+  assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
+  assumes eq_so_far: "\<forall>j<i. a j = b j"
+  assumes eq: "to_real a = to_real b"
+  shows "a i = b i"
+  using assms
+  by (metis to_real_inj_aux')
 
 
 lemma ex_least: "P (n::nat) \<Longrightarrow> \<exists>m. P m \<and> (\<forall>i<m. \<not>P i)"
@@ -409,59 +418,68 @@ oops
 
 subsection {* Alternative approach *}
 
-lemma "f \<in> r_cantor \<longleftrightarrow> cantor_ary f"
-proof
-  fix f
-  assume "f \<in> r_cantor"
-  { fix n
-    from `f \<in> r_cantor`
-    have "f \<in> r_cantor_n n" by (simp add: r_cantor_def)
-    hence "\<forall>i<n. f i \<in> {0,2}"
-    proof(induction n arbitrary: f)
-      case (Suc n)
-      hence "f \<in> r_go_left ` r_cantor_n n \<or> f \<in> r_go_right ` r_cantor_n n" by simp
-      then obtain f' where "f' \<in> r_cantor_n n" and "f = r_go_left f' \<or> f = r_go_right f'" by auto
-      from Suc.IH[OF this(1)]
-      have "\<forall>i<n. f' i \<in> {0, 2}".
-      hence "\<forall>i<n. f (Suc i) \<in> {0, 2}"
-        using `f = _ \<or> f = _`
-        by (auto simp add:  r_go_left_def   r_go_right_def)
-      moreover
-      have "f 0 \<in> {0, 2}"
-        using `f = _ \<or> f = _`
-        by (auto simp add:  r_go_left_def   r_go_right_def)
-      ultimately
-      show ?case by (metis less_Suc_eq_0_disj)
-    qed simp
-   }
-   hence "\<forall>i. f i \<in> {0,2}" by auto
-   thus "cantor_ary f" by -(rule cantor_aryI, simp)
-next
-  fix f
-  assume "cantor_ary f"
-  { fix n
-    from `cantor_ary f`
-    have "f \<in> r_cantor_n n"
-    proof(induction n arbitrary: f)
-    case 0
-      from `cantor_ary f`
-      have "n_ary 3 f" by simp
-      thus "f \<in> r_cantor_n 0" by simp
-    next
+
+lemma n_ary_go_left[simp]: "n_ary 3 f \<Longrightarrow> n_ary 3 (r_go_left f)"
+  by (auto simp add: n_ary_def r_go_left_def)
+lemma n_ary_go_right[simp]: "n_ary 3 f \<Longrightarrow> n_ary 3 (r_go_right f)"
+  by (auto simp add: n_ary_def r_go_right_def)
+
+lemma r_cantor_n_n_ary[simp]: "f \<in> r_cantor_n n \<Longrightarrow>  n_ary 3 f"
+  by (induction n arbitrary: f) auto
+
+lemma r_cantor_n_cantor_ary: "f \<in> r_cantor_n n \<longleftrightarrow> n_ary 3 f \<and> (\<forall>i<n. f i \<in> {0,2})"
+proof(intro iffI conjI, erule_tac [3] conjE)
+  fix n
+  assume "f \<in> r_cantor_n n"
+  thus "\<forall>i<n. f i \<in> {0,2}"
+  proof(induction n arbitrary: f)
     case (Suc n)
-      from cantor_aryE[OF `cantor_ary f`, where i = 0]
-      have "f 0 = 0 \<or> f 0 = 2" by simp
-      hence "f = r_go_left (\<lambda> i. f (Suc i)) \<or> f =  r_go_right (\<lambda> i. f (Suc i))"
-        by (auto simp add:  r_go_left_def   r_go_right_def)
-      moreover
-      from `cantor_ary f`
-      have "cantor_ary (\<lambda> i. f (Suc i))" by (auto simp add: n_ary_def)
-      hence "(\<lambda> i. f (Suc i)) \<in> r_cantor_n n" by (rule Suc.IH)
-      ultimately
-      show "f \<in> r_cantor_n (Suc n)" by auto
-    qed
-  }
-  thus "f \<in> r_cantor" by (simp add: r_cantor_def)
+    hence "f \<in> r_go_left ` r_cantor_n n \<or> f \<in> r_go_right ` r_cantor_n n" by simp
+    then obtain f' where "f' \<in> r_cantor_n n" and "f = r_go_left f' \<or> f = r_go_right f'" by auto
+    from Suc.IH[OF this(1)]
+    have "\<forall>i<n. f' i \<in> {0, 2}".
+    hence "\<forall>i<n. f (Suc i) \<in> {0, 2}"
+      using `f = _ \<or> f = _`
+      by (auto simp add:  r_go_left_def   r_go_right_def)
+    moreover
+    have "f 0 \<in> {0, 2}"
+      using `f = _ \<or> f = _`
+      by (auto simp add:  r_go_left_def   r_go_right_def)
+    ultimately
+    show ?case by (metis less_Suc_eq_0_disj)
+  qed simp
+next
+  fix n
+  assume "f \<in> r_cantor_n n"
+  thus "n_ary 3 f" by (rule r_cantor_n_n_ary)
+next
+  fix n
+  assume "n_ary 3 f" and  "\<forall>i<n. f i \<in> {0, 2}"
+  thus "f \<in> r_cantor_n n"
+  proof(induction n arbitrary: f)
+    case 0 thus ?case by simp
+  next
+    case (Suc n)
+    hence "f 0 = 0 \<or> f 0 = 2" by simp
+    hence "f = r_go_left (\<lambda> i. f (Suc i)) \<or> f =  r_go_right (\<lambda> i. f (Suc i))"
+      by (auto simp add:  r_go_left_def   r_go_right_def)
+    moreover
+    from Suc.prems
+    have "(\<lambda> i. f (Suc i)) \<in> r_cantor_n n"
+      by (auto intro!: Suc.IH simp add: n_ary_def)
+    ultimately
+    show "f \<in> r_cantor_n (Suc n)" by auto
+  qed
+qed
+  
+
+lemma r_cantor_cantor_ary:"f \<in> r_cantor \<longleftrightarrow> cantor_ary f"
+proof-
+  have "f \<in> r_cantor \<longleftrightarrow> (\<forall>n. f \<in> r_cantor_n n)" by (auto simp add: r_cantor_def)
+  also have "\<dots> \<longleftrightarrow> (\<forall>n. n_ary 3 f \<and> (\<forall>i<n. f i \<in> {0,2}))" unfolding r_cantor_n_cantor_ary..
+  also have "\<dots> \<longleftrightarrow> n_ary 3 f \<and> (\<forall>n. f n \<in> {0,2})" by auto
+  also have "\<dots> \<longleftrightarrow> cantor_ary f" by (metis cantor_aryE cantor_aryI)
+  finally show ?thesis.
 qed
 
 lemma n_ary_series_div[simp]: "n_ary_series n f i / n = n_ary_series n (\<lambda> i. f (i - 1)) (Suc i)"
@@ -485,13 +503,6 @@ lemma suminf_shift:
   shows "x + (\<Sum>i. f (Suc i)) = (\<Sum>i. if i = 0 then x else f i)"
   by (simp add: suminf_split_first[OF summable_changed[OF assms]])
 
-lemma n_ary_go_left[simp]: "n_ary 3 f \<Longrightarrow> n_ary 3 (r_go_left f)"
-  by (auto simp add: n_ary_def r_go_left_def)
-lemma n_ary_go_right[simp]: "n_ary 3 f \<Longrightarrow> n_ary 3 (r_go_right f)"
-  by (auto simp add: n_ary_def r_go_right_def)
-
-lemma r_cantor_n_n_ary[simp]: "f \<in> r_cantor_n n \<Longrightarrow>  n_ary 3 f"
-  by (induction n arbitrary: f) auto
 
 lemma to_real_go_right[simp]:
   assumes "n_ary 3 f"
@@ -592,6 +603,46 @@ next
   finally show ?case.
 qed
 
+lemma "n \<le> m \<Longrightarrow> r_cantor_n m \<subseteq> r_cantor_n n"
+proof (induction rule: dec_induct)
+  print_cases
+  case base thus ?case..
+next
+  case (step m)
+  have "r_cantor_n (Suc m) \<subseteq> r_cantor_n m"
+    apply simp
+  also have "\<dots> \<subseteq>  r_cantor_n n" by fact
+  finally show ?case.
+qed
+
+lemma r_cantor_n_same_prefix:
+  assumes "a \<in> r_cantor_n n" "b \<in> r_cantor_n n"
+  assumes eq: "to_real a = to_real b"
+  shows "\<forall>j<n. a j = b j"
+  using assms(1,2)
+proof(induction n)
+  case 0 show ?case by simp
+next
+  case (Suc n)
+  from  `a \<in> r_cantor_n (Suc n)` `b \<in> r_cantor_n (Suc n)`
+  have "n_ary 3 a" and "n_ary 3 b" by (metis r_cantor_n_n_ary)+
+  moreover
+  from `a \<in> r_cantor_n (Suc n)` `b \<in> r_cantor_n (Suc n)`
+  have "a n \<in> {0,2}" and "b n \<in> {0,2}" sorry
+  moreover
+  from  `a \<in> r_cantor_n (Suc n)` `b \<in> r_cantor_n (Suc n)`
+  have "a \<in> r_cantor_n n" and "b \<in> r_cantor_n n" sorry
+  hence "\<forall>j<n. a j = b j" by (rule Suc.IH)
+  moreover
+  note eq
+  ultimately
+  have "a n = b n" by (rule to_real_inj_next)
+  with `\<forall>j<n. a j = b j`
+  show ?case by (metis less_antisym)
+qed
+  
+
+
 theorem "cantor = to_real ` r_cantor"
 proof
   show "to_real` r_cantor \<subseteq> cantor"
@@ -602,6 +653,14 @@ next
   proof
     fix x
     assume "x \<in> cantor"
+    hence "\<forall> n. \<exists> f. f \<in> r_cantor_n n \<and> x = to_real f"
+      by (auto simp add: cantor_def cantor_n_eq)
+    then obtain f where "\<And>n. f n \<in> r_cantor_n n" and "\<And> n . x = to_real (f n)" by metis
+
+    { fix n
+      have 
+
+
     have "\<exists> f. f \<in> r_cantor \<and> x = to_real f" sorry
     thus "x \<in> to_real ` r_cantor" by auto
   qed
