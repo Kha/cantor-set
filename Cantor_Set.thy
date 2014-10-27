@@ -180,6 +180,27 @@ next
    show ?case by (metis power_real_of_nat)
 qed
 
+lemma bounded_0_inverse:
+  fixes f :: "nat \<Rightarrow> real"
+  assumes "x < 1"
+  assumes "c > 0"
+  assumes "\<And> i. 0 \<le> f i"
+  assumes "\<And> i. f i \<le> c * x^i"
+  shows "f ----> 0"
+proof(rule tendsto_sandwich[OF eventually_sequentiallyI eventually_sequentiallyI])
+  fix n show "0 \<le> f n" by fact
+next
+  fix n show "f n \<le> c*x^n" by fact
+next
+  show "(\<lambda>x. 0) ----> 0"  by (rule tendsto_const)
+next
+  have "0 \<le> x" by (metis assms(2-4) le_less_trans mult.commute mult_zero_left not_less power_one_right real_mult_le_cancel_iff1)
+  hence "op ^ x ----> 0" 
+    by (rule LIMSEQ_realpow_zero[OF _ assms(1)])
+  thus "(\<lambda> i. c * x^i) ----> 0"
+    by (rule tendsto_mult_right_zero)
+qed
+
 lemma suminf_n_ary_series_to_nary:
   assumes [simp]:"n > 1"
   assumes "0 \<le> x" "x \<le>1"
@@ -194,7 +215,7 @@ proof(cases "x = 1")
   also have "\<dots> = x"
   proof(rule limI)
     have "(\<lambda>i. x - (natfloor (x * (n ^ i))) / (n ^ i)) ----> 0"
-    proof(rule tendsto_sandwich[OF eventually_sequentiallyI eventually_sequentiallyI])
+    proof(rule bounded_0_inverse)
       fix i
       have "natfloor (x * (n^i)) \<le> x * (n^i)" 
           using assms by (simp add: real_natfloor_le field_simps)
@@ -205,16 +226,12 @@ proof(cases "x = 1")
       have "x * (n^i) - natfloor (x * (n^i)) \<le> 1"
          by (metis comm_monoid_diff_class.diff_cancel le_natfloor_eq_one less_eq_real_def natfloor_neg natfloor_one natfloor_subtract not_le power_0 power_eq_0_iff)
       from divide_right_mono[OF this, where c = "n^i"] assms(1)
-      show "x - natfloor (x * (n ^ i)) / (n ^ i) \<le> inverse (n^i)"
+      show "x - natfloor (x * (n ^ i)) / (n ^ i) \<le> 1 * (1/n)^i"
         using assms(1) by (simp add: field_simps )
     next
-      show "(\<lambda>i. 0) ----> 0" by (rule tendsto_const)
+      show "1/n < 1" using assms(1) by auto
     next
-      find_theorems "_ ----> 0"
-      from assms(1)
-      have "1 < real n" by simp
-      hence "(\<lambda>i. inverse ((real n) ^ i)) ----> 0" by (rule LIMSEQ_inverse_realpow_zero)
-      thus "(\<lambda>i. inverse (n ^ i)) ----> 0" by simp
+      show "0 < (1::real)" by auto
     qed
     thus "(\<lambda>i. (natfloor (x * (n ^ i))) / (n ^ i)) ----> x"
       by (rule LIMSEQ_diff_approach_zero2[OF tendsto_const])
@@ -389,7 +406,6 @@ next
 oops
 
 lemma "cantor = (suminf \<circ> n_ary_series 3) ` {f. cantor_ary f}"
-find_theorems "_ \<Longrightarrow> _ : _ ` _"
 proof(intro set_eqI iffI)
   fix x
   assume "x \<in> cantor"
@@ -632,8 +648,57 @@ next
   with `\<forall>j<n. a j = b j`
   show ?case by (metis less_antisym)
 qed
-  
 
+lemma n_ary_series_diff:
+  assumes "n_ary 3 a" and  "n_ary 3 b"
+  shows "\<bar>n_ary_series 3 a n - n_ary_series 3 b n\<bar> \<le> (1/3)^n"
+proof-
+  have "\<bar>n_ary_series 3 a n - n_ary_series 3 b n\<bar> = \<bar>real (a n) - real(b n)\<bar> * (1 / 3) ^ Suc n"
+    unfolding n_ary_series_def by (auto simp add: field_simps)
+  also
+  from assms have "\<bar>real (a n)\<bar> < 3" and  "\<bar>real (b n)\<bar> < 3" by auto
+  hence "\<bar>real (a n) - real(b n)\<bar> \<le> 3" by auto
+  also have "(3::real) * (1 / 3) ^ Suc n = (1/3)^n" by (simp add: power_Suc field_simps)
+  finally show ?thesis by this auto
+qed
+
+lemma to_real_cont:
+  assumes "n_ary 3 a" and  "n_ary 3 b"
+  assumes "\<forall>j<n. a j = b j"
+  shows "\<bar>to_real a - to_real b\<bar> \<le> 3 * (1 / 3) ^ n"
+proof-
+  note sm = n_ary_summable[OF assms(1)] n_ary_summable[OF assms(2)]
+  note sm' = summable_diff[OF sm]
+  have sm''': "summable (\<lambda>i. ((1 / 3)::real) ^ i)" by (rule summable_geometric) simp
+  hence sm''': "summable (\<lambda>i.  (1/3 :: real) ^ (i + n))" by (metis summable_iff_shift[where k = n])
+  hence sm'': "summable (\<lambda>i. \<bar>n_ary_series 3 a (i + n) - n_ary_series 3 b (i + n)\<bar>)"
+    apply (rule summable_rabs_comparison_test[rotated])
+    using n_ary_series_diff[OF assms(1,2)]
+    apply auto
+    done
+
+  have "\<bar>to_real a - to_real b\<bar> = \<bar>(\<Sum>i. n_ary_series 3 a i - n_ary_series 3 b i)\<bar>"
+    unfolding to_real_def by (rule arg_cong[OF suminf_diff[OF sm]])
+  also have "\<dots> = \<bar>(\<Sum>i. n_ary_series 3 a (i + n) - n_ary_series 3 b (i + n)) + setsum (\<lambda> i. n_ary_series 3 a i - n_ary_series 3 b i) {..<n}\<bar>"
+    by (rule arg_cong[OF suminf_split_initial_segment[OF sm']])
+  also have "\<dots> = \<bar>(\<Sum>i. n_ary_series 3 a (i + n) - n_ary_series 3 b (i + n))\<bar>"
+    using assms(3) by (auto simp add: n_ary_series_def)
+  also have "\<dots> \<le> (\<Sum>i. \<bar>n_ary_series 3 a (i + n) - n_ary_series 3 b (i + n)\<bar>)"
+    by (rule summable_rabs[OF sm''])
+  also have "\<dots> \<le> (\<Sum>i. (1/3::real)^(i + n))"
+    apply (rule suminf_le[OF _ sm'' sm'''])
+    apply (rule)
+    apply (rule n_ary_series_diff[OF assms(1,2)])
+    done
+  also have "\<dots> = (\<Sum>i. (1/3::real)^i * (1/3::real)^n)"
+    by (simp add: field_simps add: power_add)
+  also have "\<dots> = (\<Sum>i. (1/3::real)^i) * (1/3::real)^n"
+    by (rule suminf_mult2[symmetric, OF summable_geometric]) simp
+  also have "\<dots> = 1 / (1 - 1 / 3) * (1 / 3) ^ n"
+    by (simp add: suminf_geometric) 
+  also have "\<dots> \<le> 3 *  (1 / 3) ^ n" by (simp add: field_simps)
+  finally show ?thesis.
+qed
 
 theorem "cantor = to_real ` r_cantor"
 proof
@@ -647,17 +712,54 @@ next
     assume "x \<in> cantor"
     hence "\<forall> n. \<exists> f. f \<in> r_cantor_n n \<and> x = to_real f"
       by (auto simp add: cantor_def cantor_n_eq)
-    then obtain f where "\<And>n. f n \<in> r_cantor_n n" and "\<And> n . x = to_real (f n)" by metis
+    then obtain f where f: "\<And>n. f n \<in> r_cantor_n n" "\<And> n . x = to_real (f n)" by metis
 
-    { fix n
-      have 
-
-
-    have "\<exists> f. f \<in> r_cantor \<and> x = to_real f" sorry
-    thus "x \<in> to_real ` r_cantor" by auto
+    { fix n m :: nat
+      note f(1)
+      moreover
+      assume "n \<le> m" with f(1)
+      have "f m \<in> r_cantor_n n" by (metis r_cantor_n_mono subsetCE)
+      moreover
+      from f(2) have "to_real (f n) = to_real (f m)" by auto
+      ultimately
+      have "\<forall>j<n. f n j = f m j" by (rule r_cantor_n_same_prefix)
+    }
+    note * = this
+    def f' == "\<lambda> n. f (Suc n) n"
+    
+    have "\<forall> n. f' n \<in> {0,2}" using f(1) by (metis f'_def lessI r_cantor_n_cantor_ary)
+    hence "cantor_ary f'" using  cantor_aryI[where f = f'] by auto
+    hence "f' \<in> r_cantor" unfolding r_cantor_cantor_ary.
+    moreover
+    have "(\<lambda> n. abs (to_real f' - to_real (f n))) ----> 0"
+    proof(rule bounded_0_inverse)
+      fix n
+      show "0 \<le> \<bar>to_real f' - to_real (f n)\<bar>" by simp
+    next
+      fix n :: nat
+      
+      have "n_ary 3 f'" by (metis `cantor_ary f'`)
+      moreover
+      have "n_ary 3 (f n)" by (metis f(1) r_cantor_n_n_ary)
+      moreover
+      have "\<forall>j<n. f' j = f n j"  by (auto simp add: f'_def *)
+      ultimately
+      show "\<bar>to_real f' - to_real (f n)\<bar> \<le> 3* (1/3)^n" by (rule to_real_cont)
+    next
+      show "1/3 < (1::real)" by auto
+    next
+      show "0 < (3::real)" by auto
+    qed
+    hence "(\<lambda> n. to_real f' - to_real (f n)) ----> 0" by (rule tendsto_rabs_zero_cancel)
+    hence "(\<lambda> n. to_real f' - x) ----> 0" unfolding f(2)[symmetric].
+    hence "x = to_real f'" by (simp add: LIMSEQ_const_iff)
+    ultimately
+    show "x \<in> to_real ` r_cantor" by auto
   qed
 qed
 
+theorem "bij_betw to_real {f. cantor_ary f} cantor"
+sledgehammer
 
 
 end
