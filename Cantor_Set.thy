@@ -1,5 +1,5 @@
 theory Cantor_Set
-imports Main Real Series
+imports Main Real Series "~~/src/HOL/Library/Product_Vector"
 begin
 
 subsection {* Definition of the Cantor Set *}
@@ -259,12 +259,13 @@ definition "r_cantor \<equiv> \<Inter>range r_cantor_n"
 
 subsection {* A bijection between the Cantor Set and a subset of ternary representations *}
 
-abbreviation "cantor_ary f \<equiv> n_ary 3 f \<and> (\<forall>i. f i \<noteq> 1)"
+definition "cantor_ary f \<equiv> n_ary 3 f \<and> (\<forall>i. f i \<noteq> 1)"
 
 lemma cantor_aryI:
   assumes "\<And> i. f i \<in> {0,2}"
   shows "cantor_ary f"
   using assms
+  unfolding cantor_ary_def
   apply (auto simp add: n_ary_def)
   apply (metis Suc_le_eq eval_nat_numeral(3) order_refl zero_less_numeral)
   apply (metis (no_types) Suc_1 n_not_Suc_n numeral_1_eq_Suc_0 numeral_One)
@@ -274,7 +275,7 @@ lemma cantor_aryE:
   assumes "cantor_ary f"
   shows "f i \<in> {0,2}"
 proof-
-  from assms have "f i \<noteq> 1" "f i \<in> {0..<3}" by (auto simp only:n_ary_def)
+  from assms have "f i \<noteq> 1" "f i \<in> {0..<3}" by (auto simp only:n_ary_def cantor_ary_def)
   thus ?thesis by auto
 qed
 
@@ -374,7 +375,7 @@ proof (rule inj_onI, simp del:One_nat_def)
     from ex_least[of "\<lambda>j. a j \<noteq> b j", OF this]
     obtain i where i: "a i \<noteq> b i" "\<forall>j<i. a j = b j" by auto
 
-    from asms have "n_ary 3 a" "n_ary 3 b" by auto
+    from asms have "n_ary 3 a" "n_ary 3 b" by (auto simp:cantor_ary_def)
     from this cantor_aryE[OF asms(1)] cantor_aryE[OF asms(2)] i asms(3)
     show False by (rule to_real_inj_aux')
   qed
@@ -494,7 +495,7 @@ proof-
   have "f \<in> r_cantor \<longleftrightarrow> (\<forall>n. f \<in> r_cantor_n n)" by (auto simp add: r_cantor_def)
   also have "\<dots> \<longleftrightarrow> (\<forall>n. n_ary 3 f \<and> (\<forall>i<n. f i \<in> {0,2}))" unfolding r_cantor_n_cantor_ary..
   also have "\<dots> \<longleftrightarrow> n_ary 3 f \<and> (\<forall>n. f n \<in> {0,2})" by auto
-  also have "\<dots> \<longleftrightarrow> cantor_ary f" by (metis cantor_aryE cantor_aryI)
+  also have "\<dots> \<longleftrightarrow> cantor_ary f" by (metis cantor_aryE cantor_aryI cantor_ary_def)
   finally show ?thesis.
 qed
 
@@ -742,7 +743,7 @@ next
     next
       fix n :: nat
       
-      have "n_ary 3 f'" by (metis `cantor_ary f'`)
+      have "n_ary 3 f'" by (metis `cantor_ary f'` cantor_ary_def)
       moreover
       have "n_ary 3 (f n)" by (metis f(1) r_cantor_n_n_ary)
       moreover
@@ -762,10 +763,68 @@ next
   qed
 qed
 
+lemmas cantor_ary_surj = to_real_surj[symmetric, unfolded r_cantor_cantor_ary']
+
 theorem "bij_betw to_real {f. cantor_ary f} cantor"
   apply (rule bij_betw_imageI)
   apply (rule cantor_ary_inj)
-  apply (rule to_real_surj[symmetric, unfolded r_cantor_cantor_ary'])
+  apply (rule cantor_ary_surj)
   done
+
+subsection {* A space-filling curve *}
+
+definition "homeomorphism f A B \<equiv> bij_betw f A B \<and> continuous_on A f \<and> continuous_on B (the_inv_into A f)"
+
+abbreviation "from_real \<equiv> the_inv_into {f. cantor_ary f} to_real"
+definition "fill_1 f i \<equiv> f (2 * i)"
+definition "fill_2 f i \<equiv> f (2 * i + 1)"
+
+definition fill :: "real \<Rightarrow> real \<times> real" where
+  "fill x \<equiv> (to_real (fill_1 (from_real x)), to_real (fill_2 (from_real x)))"
+
+lemma[simp]: "cantor_ary f \<Longrightarrow> cantor_ary (fill_1 f)" by (auto simp:n_ary_def cantor_ary_def fill_1_def)
+lemma[simp]: "cantor_ary f \<Longrightarrow> cantor_ary (fill_2 f)" by (auto simp:n_ary_def cantor_ary_def fill_2_def)
+
+lemma fill_inj: "inj_on fill cantor"
+proof (rule inj_onI)
+  fix x y
+  let ?a = "from_real x"
+  let ?b = "from_real y"
+  assume "x \<in> cantor" "y \<in> cantor" 
+  hence[simp]: "cantor_ary ?a" "cantor_ary ?b" and xy: "x = to_real ?a" "y = to_real ?b"
+    using the_inv_into_into[OF cantor_ary_inj] f_the_inv_into_f[OF cantor_ary_inj] cantor_ary_surj by auto
+
+  assume asm: "fill x = fill y"
+  hence "to_real (fill_1 ?a) = to_real (fill_1 ?b)" by (simp add:fill_def)
+  hence fill_1: "fill_1 ?a = fill_1 ?b" by (rule inj_onD[OF cantor_ary_inj], simp_all)
+
+  from asm have "to_real (fill_2 ?a) = to_real (fill_2 ?b)" by (simp add:fill_def)
+  hence fill_2: "fill_2 ?a = fill_2 ?b"
+    by (rule inj_onD[OF cantor_ary_inj], auto)
+  
+  have "?a = ?b"
+  proof
+    fix i
+    show "?a i = ?b i"
+    proof (cases "i mod 2 = 0")
+      case True
+      hence "?a i = fill_1 ?a (i div 2)" by (auto simp:fill_1_def)
+      moreover have "fill_1 ?b (i div 2) = ?b i" using True by (auto simp:fill_1_def)
+      ultimately show ?thesis by (simp add:fill_1)
+    next
+      case False
+      hence "i > 0" by simp
+      with False have 1: "(i - 1) mod 2 = 0" by (metis `0 < i` even_def even_num_iff)
+      hence "?a i = (fill_2 ?a) ((i - 1) div 2)" by (simp add:fill_2_def mult_div_cancel `i > 0`)
+      moreover have "(fill_2 ?b) ((i - 1) div 2) = ?b i" using 1 by (simp add:fill_2_def mult_div_cancel `i > 0`)
+      ultimately show ?thesis by (simp add:fill_2)
+    qed
+  qed
+  thus "x = y" using xy by simp
+qed
+
+theorem "homeomorphism fill cantor (cantor \<times> cantor)"
+  apply (simp add:homeomorphism_def bij_betw_def fill_inj)
+  oops
 
 end
