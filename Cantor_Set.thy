@@ -35,6 +35,9 @@ definition n_ary_series :: "(nat \<Rightarrow> nat) \<Rightarrow> nat \<Rightarr
   "n_ary_series f = (\<lambda>k. real (f k mod n) * (1 / n) ^ Suc k)"
 declare power_Suc[simp del]
 
+definition to_real :: "(nat \<Rightarrow> nat) \<Rightarrow> real"
+  where "to_real = (\<lambda> f. suminf (n_ary_series f))"
+
 lemma summable_geometric': "norm (c::real) < 1 \<Longrightarrow> summable (\<lambda>k. c ^ (Suc k))"
   apply (rule summable_ignore_initial_segment[of _ 1, simplified Suc_eq_plus1[symmetric]])
   apply (rule summable_geometric)
@@ -85,11 +88,12 @@ proof (rule summableI_nonneg_bounded[where x="suminf period_one"])
   finally show "setsum (n_ary_series f) {..<k} \<le> suminf period_one" .
 qed
 
-lemma nary_pos[simp]: "suminf (n_ary_series f) \<ge> 0"
+lemma nary_pos[simp]: "to_real f \<ge> 0"
+  unfolding to_real_def
   by (rule suminf_nonneg, simp) (auto simp:n_ary_series_def)
 
 lemma nary_le_1[simp]:
-  shows "suminf (n_ary_series f) \<le> 1"
+  shows "to_real f \<le> 1"
 proof-
   have "suminf (n_ary_series f) \<le> suminf period_one"
   proof (rule suminf_le, rule)
@@ -103,7 +107,7 @@ proof-
     show "summable period_one" by (rule period_one_summable)
   qed
   also have "\<dots> = 1" by (rule suminf_period_one_1)
-  finally show ?thesis.
+  finally show ?thesis unfolding to_real_def .
 qed
 
 subsection {* The n-arity expansion of a real *}
@@ -201,12 +205,12 @@ qed
 lemma suminf_n_ary_series_to_nary:
   fixes x :: real
   assumes "0 \<le> x" "x \<le>1"
-  shows "suminf (n_ary_series (to_nary x)) = x"
+  shows "to_real (to_nary x) = x"
 proof(cases "x = 1")
   case False with assms(2) have "x < 1" by simp
 
-  have "suminf (n_ary_series (to_nary x)) = lim (\<lambda>i. setsum (n_ary_series (to_nary x)) {..<i})"
-    by (rule suminf_eq_lim)
+  have "to_real (to_nary x) = lim (\<lambda>i. setsum (n_ary_series (to_nary x)) {..<i})"
+    unfolding to_real_def by (rule suminf_eq_lim)
   also have "\<dots> = lim (\<lambda>i. natfloor (x * n^i) / n^i)"
     unfolding partial_n_ary[OF assms(1) `x < 1` ] by simp
   also have "\<dots> = x"
@@ -238,7 +242,7 @@ next
   case True
   hence "to_nary x = (\<lambda>i. n - 1)" by auto
   thus ?thesis
-    using True suminf_period_one_1[unfolded period_one_def] by simp
+    unfolding to_real_def using True suminf_period_one_1[unfolded period_one_def] by simp
 qed
 end
 
@@ -272,9 +276,6 @@ lemma cantor_aryE:
   shows "f i \<in> {0,2}"
 using assms  unfolding cantor_ary_def by auto 
 
-definition to_real :: "(nat \<Rightarrow> nat) \<Rightarrow> real"
-  where "to_real = (\<lambda> f. suminf (n_ary_series f))"
-
 lemma to_real_inj_aux:
   assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
   assumes ord: "a i < b i" "\<forall>j<i. a j = b j"
@@ -306,7 +307,7 @@ proof-
     have 1: "setsum (n_ary_series a) {..<i} = setsum (n_ary_series b) {..<i}" using ord(2) by (auto simp:n_ary_series_def)
     show ?thesis by (subst 1) (rule suminf_split_initial_segment[OF n_ary_summable, symmetric])
   qed
-  finally show False using eq  by (auto simp add: to_real_def)
+  finally show False using eq unfolding to_real_def by auto
 qed
 
 lemma to_real_inj_aux':
@@ -485,13 +486,12 @@ lemma interval_covered:
 proof(intro set_eqI iffI)
   fix x
   assume "x \<in> range to_real"
-  thus "x \<in> {0..1}" by (auto simp add: to_real_def)
+  thus "x \<in> {0..1}" by auto
 next
   fix x :: real
   assume "x \<in> {0..1}" hence "0 \<le> x" and "x \<le> 1" by auto
 
   have "x = to_real (to_nary x)"
-    unfolding to_real_def
     by (rule suminf_n_ary_series_to_nary[OF assms `0 \<le> x` `x \<le> 1`, symmetric])
   then
   show "x \<in> range to_real" by auto
