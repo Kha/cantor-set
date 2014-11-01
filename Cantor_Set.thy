@@ -263,19 +263,6 @@ definition "r_cantor \<equiv> \<Inter>range r_cantor_n"
 
 subsection {* A bijection between the Cantor Set and a subset of ternary representations *}
 
-definition cantor_ary :: "(nat \<Rightarrow> nat) \<Rightarrow> bool" 
-  where "cantor_ary f = (\<forall>i. f i \<in> {0,2})"
-
-lemma cantor_aryI:
-  assumes "\<And> i. f i \<in> {0,2}"
-  shows "cantor_ary f"
-  using assms  unfolding cantor_ary_def by auto
- 
-lemma cantor_aryE:
-  assumes "cantor_ary f"
-  shows "f i \<in> {0,2}"
-using assms  unfolding cantor_ary_def by auto 
-
 lemma to_real_inj_aux:
   assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
   assumes ord: "a i < b i" "\<forall>j<i. a j = b j"
@@ -346,25 +333,6 @@ lemma to_real_inj_next:
 lemma ex_least: "P (n::nat) \<Longrightarrow> \<exists>m. P m \<and> (\<forall>i<m. \<not>P i)"
   by (metis ex_least_nat_le not_less0)
 
-lemma cantor_ary_inj: "inj_on to_real {f. cantor_ary f}"
-proof (rule inj_onI, simp del:One_nat_def)
-  fix a b
-  assume asms: "cantor_ary a" "cantor_ary b" "to_real a = to_real b"
-
-  show "a = b"
-  proof (rule ccontr)
-    assume "a \<noteq> b"
-    then obtain i where "a i \<noteq> b i" by auto
-
-    from ex_least[of "\<lambda>j. a j \<noteq> b j", OF this]
-    obtain i where i: "a i \<noteq> b i" "\<forall>j<i. a j = b j" by auto
-
-    from cantor_aryE[OF asms(1)] cantor_aryE[OF asms(2)] i asms(3)
-    show False by (rule to_real_inj_aux')
-  qed
-qed
-
-
 
 lemma r_cantor_n_cantor_ary: "f \<in> r_cantor_n n \<longleftrightarrow> (\<forall>i<n. f i \<in> {0,2})"
 proof(intro iffI conjI)
@@ -408,17 +376,34 @@ next
 qed
   
 
-lemma r_cantor_cantor_ary:"f \<in> r_cantor \<longleftrightarrow> cantor_ary f"
+lemma r_cantor_zero_or_two: "f \<in> r_cantor \<longleftrightarrow> (\<forall> i. f i \<in> {0,2})"
 proof-
   have "f \<in> r_cantor \<longleftrightarrow> (\<forall>n. f \<in> r_cantor_n n)" by (auto simp add: r_cantor_def)
   also have "\<dots> \<longleftrightarrow> (\<forall>n. (\<forall>i<n. f i \<in> {0,2}))" unfolding r_cantor_n_cantor_ary..
   also have "\<dots> \<longleftrightarrow> (\<forall>n. f n \<in> {0,2})" by auto
-  also have "\<dots> \<longleftrightarrow> cantor_ary f" by (metis cantor_aryE cantor_aryI cantor_ary_def)
   finally show ?thesis.
 qed
 
-lemma r_cantor_cantor_ary':"r_cantor = {f . cantor_ary f}"
-  using r_cantor_cantor_ary by auto
+lemma to_real_inj: "inj_on to_real r_cantor"
+proof (rule inj_onI)
+  fix a b
+  assume asms: "a \<in> r_cantor" "b \<in> r_cantor""to_real a = to_real b"
+
+  show "a = b"
+  proof (rule ccontr)
+    assume "a \<noteq> b"
+    then obtain i where "a i \<noteq> b i" by auto
+
+    from ex_least[of "\<lambda>j. a j \<noteq> b j", OF this]
+    obtain i where i: "a i \<noteq> b i" "\<forall>j<i. a j = b j" by auto
+   
+    from asms(1,2)
+    have "a i \<in> {0,2}" and "b i \<in> {0,2}" unfolding r_cantor_zero_or_two by auto
+
+    from this i asms(3)
+    show False by (rule to_real_inj_aux')
+  qed
+qed
 
 
 lemma suminf_split_first:
@@ -588,7 +573,7 @@ proof-
   finally show ?thesis.
 qed
 
-theorem to_real_surj: "cantor = to_real ` r_cantor"
+theorem to_real_surj: "to_real ` r_cantor = cantor"
 proof
   show "to_real` r_cantor \<subseteq> cantor"
   unfolding cantor_def r_cantor_def
@@ -616,8 +601,7 @@ next
     def f' == "\<lambda> n. f (Suc n) n"
     
     have "\<forall> n. f' n \<in> {0,2}" using f(1) by (metis f'_def lessI r_cantor_n_cantor_ary)
-    hence "cantor_ary f'" using  cantor_aryI[where f = f'] by auto
-    hence "f' \<in> r_cantor" unfolding r_cantor_cantor_ary.
+    hence "f' \<in> r_cantor" unfolding r_cantor_zero_or_two.
     moreover
     have "(\<lambda> n. abs (to_real f' - to_real (f n))) ----> 0"
     proof(rule bounded_0_inverse)
@@ -642,24 +626,24 @@ next
   qed
 qed
 
-lemmas cantor_ary_surj = to_real_surj[symmetric, unfolded r_cantor_cantor_ary']
-
-theorem "bij_betw to_real {f. cantor_ary f} cantor"
-  by (rule bij_betw_imageI[OF cantor_ary_inj cantor_ary_surj])
+theorem "bij_betw to_real r_cantor cantor"
+  by (rule bij_betw_imageI[OF to_real_inj to_real_surj])
 
 subsection {* A space-filling curve *}
 
 definition "homeomorphism f A B \<equiv> bij_betw f A B \<and> continuous_on A f \<and> continuous_on B (the_inv_into A f)"
 
-abbreviation "from_real \<equiv> the_inv_into {f. cantor_ary f} to_real"
+abbreviation "from_real \<equiv> the_inv_into r_cantor to_real"
 definition "fill_1 f i \<equiv> f (2 * i)"
 definition "fill_2 f i \<equiv> f (2 * i + 1)"
 
 definition fill :: "real \<Rightarrow> real \<times> real" where
   "fill x \<equiv> (to_real (fill_1 (from_real x)), to_real (fill_2 (from_real x)))"
 
-lemma[simp]: "cantor_ary f \<Longrightarrow> cantor_ary (fill_1 f)" by (auto simp:n_ary_def cantor_ary_def fill_1_def)
-lemma[simp]: "cantor_ary f \<Longrightarrow> cantor_ary (fill_2 f)" by (auto simp:n_ary_def cantor_ary_def fill_2_def)
+lemma[simp]: "f \<in> r_cantor \<Longrightarrow> fill_1 f \<in> r_cantor"
+    unfolding r_cantor_zero_or_two by (auto simp add: fill_1_def)
+lemma[simp]: "f \<in> r_cantor \<Longrightarrow> fill_2 f \<in> r_cantor"
+    unfolding r_cantor_zero_or_two by (auto simp add: fill_2_def)
 
 lemma fill_inj: "inj_on fill cantor"
 proof (rule inj_onI)
@@ -667,16 +651,16 @@ proof (rule inj_onI)
   let ?a = "from_real x"
   let ?b = "from_real y"
   assume "x \<in> cantor" "y \<in> cantor" 
-  hence[simp]: "cantor_ary ?a" "cantor_ary ?b" and xy: "x = to_real ?a" "y = to_real ?b"
-    using the_inv_into_into[OF cantor_ary_inj] f_the_inv_into_f[OF cantor_ary_inj] cantor_ary_surj by auto
+  hence[simp]: "?a \<in> r_cantor" "?b \<in> r_cantor" and xy: "x = to_real ?a" "y = to_real ?b"
+    using the_inv_into_into[OF to_real_inj] f_the_inv_into_f[OF to_real_inj] to_real_surj by auto
 
   assume asm: "fill x = fill y"
   hence "to_real (fill_1 ?a) = to_real (fill_1 ?b)" by (simp add:fill_def)
-  hence fill_1: "fill_1 ?a = fill_1 ?b" by (rule inj_onD[OF cantor_ary_inj], simp_all)
+  hence fill_1: "fill_1 ?a = fill_1 ?b" by (rule inj_onD[OF to_real_inj], simp_all)
 
   from asm have "to_real (fill_2 ?a) = to_real (fill_2 ?b)" by (simp add:fill_def)
   hence fill_2: "fill_2 ?a = fill_2 ?b"
-    by (rule inj_onD[OF cantor_ary_inj], auto)
+    by (rule inj_onD[OF to_real_inj], auto)
   
   have "?a = ?b"
   proof
