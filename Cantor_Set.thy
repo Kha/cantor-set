@@ -38,6 +38,7 @@ declare power_Suc[simp del]
 definition to_real :: "(nat \<Rightarrow> nat) \<Rightarrow> real"
   where "to_real = (\<lambda> f. suminf (n_ary_series f))"
 
+
 lemma summable_geometric': "norm (c::real) < 1 \<Longrightarrow> summable (\<lambda>k. c ^ (Suc k))"
   apply (rule summable_ignore_initial_segment[of _ 1, simplified Suc_eq_plus1[symmetric]])
   apply (rule summable_geometric)
@@ -202,7 +203,7 @@ next
     by (rule tendsto_mult_right_zero)
 qed
 
-lemma suminf_n_ary_series_to_nary:
+lemma to_real_to_nary:
   fixes x :: real
   assumes "0 \<le> x" "x \<le>1"
   shows "to_real (to_nary x) = x"
@@ -244,6 +245,19 @@ next
   thus ?thesis
     unfolding to_real_def using True suminf_period_one_1[unfolded period_one_def] by simp
 qed
+
+lemma range_to_real:
+  shows "range to_real = {0..1}"
+proof(intro set_eqI iffI)
+  fix x :: real
+  assume "x \<in> {0..1}" hence "0 \<le> x" and "x \<le> 1" by auto
+
+  have "x = to_real (to_nary x)"
+    by (rule to_real_to_nary[OF assms `0 \<le> x` `x \<le> 1`, symmetric])
+  then
+  show "x \<in> range to_real" by auto
+qed auto
+
 end
 
 text {* We only really need this with @{term "n = 3"} there: *}
@@ -316,7 +330,6 @@ qed
 
 subsubsection {* Injectivity *}
 
-
 lemma to_real_inj_aux:
   assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
   assumes ord: "a i < b i" "\<forall>j<i. a j = b j"
@@ -351,23 +364,23 @@ proof-
   finally show False using eq unfolding to_real_def by auto
 qed
 
-lemma to_real_inj_aux':
+lemma to_real_inj_next:
   assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
-  assumes ne: "a i \<noteq> b i" "\<forall>j<i. a j = b j"
+  assumes "\<forall>j<i. a j = b j"
   assumes eq: "to_real a = to_real b"
-  shows False
-proof-
-  from ne
-  have "a i < b i \<or> b i < a i" by auto
-  thus ?thesis
+  shows "a i = b i"
+proof(rule ccontr)
+  assume ne: "a i \<noteq> b i"
+  hence "a i < b i \<or> b i < a i" by auto
+  thus False
   proof
     assume *: "a i < b i"
-    show False by (rule to_real_inj_aux[OF assms(1,2) * assms(4,5)])
+    show False by (rule to_real_inj_aux[OF assms(1,2) * assms(3,4)])
   next
     assume *: "b i < a i"
     note assms(2,1) *
     moreover
-    from ne(2) have "\<forall>j<i. b j = a j" by auto
+    from assms(3) have "\<forall>j<i. b j = a j" by auto
     moreover
     note eq[symmetric]
     ultimately
@@ -375,38 +388,23 @@ proof-
   qed
 qed
 
-lemma to_real_inj_next:
-  assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
-  assumes eq_so_far: "\<forall>j<i. a j = b j"
-  assumes eq: "to_real a = to_real b"
-  shows "a i = b i"
-  using assms
-  by (metis to_real_inj_aux')
-
-
-lemma ex_least: "P (n::nat) \<Longrightarrow> \<exists>m. P m \<and> (\<forall>i<m. \<not>P i)"
-  by (metis ex_least_nat_le not_less0)
-
-
-
 lemma to_real_inj: "inj_on to_real r_cantor"
-proof (rule inj_onI)
-  fix a b
-  assume asms: "a \<in> r_cantor" "b \<in> r_cantor""to_real a = to_real b"
+proof (rule inj_onI, rule)
+  fix a b i
+  assume asms: "a \<in> r_cantor" "b \<in> r_cantor" "to_real a = to_real b"
 
-  show "a = b"
-  proof (rule ccontr)
-    assume "a \<noteq> b"
-    then obtain i where "a i \<noteq> b i" by auto
-
-    from ex_least[of "\<lambda>j. a j \<noteq> b j", OF this]
-    obtain i where i: "a i \<noteq> b i" "\<forall>j<i. a j = b j" by auto
-   
+  show "a i = b i"
+  proof(induction i rule: measure_induct)
+    fix i
+    
     from asms(1,2)
     have "a i \<in> {0,2}" and "b i \<in> {0,2}" unfolding r_cantor_zero_or_two by auto
-
-    from this i asms(3)
-    show False by (rule to_real_inj_aux')
+    moreover
+    assume "\<forall>j<i. a j = b j"  
+    moreover
+    note `to_real _ = to_real _`
+    ultimately
+    show "a i = b i" by (rule to_real_inj_next)
   qed
 qed
 
@@ -471,28 +469,12 @@ proof-
   finally show ?thesis.
 qed
 
-(* This is basically the main theorem, for a simpler set :-) *)
-lemma interval_covered:
-  shows "{0..1} = range to_real"
-proof(intro set_eqI iffI)
-  fix x
-  assume "x \<in> range to_real"
-  thus "x \<in> {0..1}" by auto
-next
-  fix x :: real
-  assume "x \<in> {0..1}" hence "0 \<le> x" and "x \<le> 1" by auto
-
-  have "x = to_real (to_nary x)"
-    by (rule suminf_n_ary_series_to_nary[OF assms `0 \<le> x` `x \<le> 1`, symmetric])
-  then
-  show "x \<in> range to_real" by auto
-qed
 
 lemma cantor_n_eq:  "cantor_n n = to_real` r_cantor_n n"
 proof(induction n)
   case 0 
   have "cantor_n 0  = {0..1}" by simp
-  also have "\<dots> = range to_real" by (rule interval_covered)
+  also have "\<dots> = range to_real" by (rule range_to_real[symmetric])
   also have "\<dots> = to_real ` r_cantor_n 0" by simp
   finally show ?case.
 next
