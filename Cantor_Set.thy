@@ -263,6 +263,60 @@ definition "r_cantor \<equiv> \<Inter>range r_cantor_n"
 
 subsection {* A bijection between the Cantor Set and a subset of ternary representations *}
 
+subsubsection {* Recognizing the cantor sets via their digits *}
+
+lemma r_cantor_n_cantor_ary: "f \<in> r_cantor_n n \<longleftrightarrow> (\<forall>i<n. f i \<in> {0,2})"
+proof(intro iffI conjI)
+  fix n
+  assume "f \<in> r_cantor_n n"
+  thus "\<forall>i<n. f i \<in> {0,2}"
+  proof(induction n arbitrary: f)
+    case (Suc n)
+    hence "f \<in> r_go_left ` r_cantor_n n \<or> f \<in> r_go_right ` r_cantor_n n" by simp
+    then obtain f' where "f' \<in> r_cantor_n n" and "f = r_go_left f' \<or> f = r_go_right f'" by auto
+    from Suc.IH[OF this(1)]
+    have "\<forall>i<n. f' i \<in> {0, 2}".
+    hence "\<forall>i<n. f (Suc i) \<in> {0, 2}"
+      using `f = _ \<or> f = _`
+      by (auto simp add:  r_go_left_def   r_go_right_def)
+    moreover
+    have "f 0 \<in> {0, 2}"
+      using `f = _ \<or> f = _`
+      by (auto simp add:  r_go_left_def   r_go_right_def)
+    ultimately
+    show ?case by (metis less_Suc_eq_0_disj)
+  qed simp
+next
+  fix n
+  assume "\<forall>i<n. f i \<in> {0, 2}"
+  thus "f \<in> r_cantor_n n"
+  proof(induction n arbitrary: f)
+    case 0 thus ?case by simp
+  next
+    case (Suc n)
+    hence "f 0 = 0 \<or> f 0 = 2" by simp
+    hence "f = r_go_left (\<lambda> i. f (Suc i)) \<or> f =  r_go_right (\<lambda> i. f (Suc i))"
+      by (auto simp add:  r_go_left_def   r_go_right_def)
+    moreover
+    from Suc.prems
+    have "(\<lambda> i. f (Suc i)) \<in> r_cantor_n n"
+      by (auto intro!: Suc.IH)
+    ultimately
+    show "f \<in> r_cantor_n (Suc n)" by auto
+  qed
+qed
+
+lemma r_cantor_zero_or_two: "f \<in> r_cantor \<longleftrightarrow> (\<forall> i. f i \<in> {0,2})"
+proof-
+  have "f \<in> r_cantor \<longleftrightarrow> (\<forall>n. f \<in> r_cantor_n n)" by (auto simp add: r_cantor_def)
+  also have "\<dots> \<longleftrightarrow> (\<forall>n. (\<forall>i<n. f i \<in> {0,2}))" unfolding r_cantor_n_cantor_ary..
+  also have "\<dots> \<longleftrightarrow> (\<forall>n. f n \<in> {0,2})" by auto
+  finally show ?thesis.
+qed
+
+subsubsection {* Injectivity *}
+
+
 lemma to_real_inj_aux:
   assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
   assumes ord: "a i < b i" "\<forall>j<i. a j = b j"
@@ -334,55 +388,6 @@ lemma ex_least: "P (n::nat) \<Longrightarrow> \<exists>m. P m \<and> (\<forall>i
   by (metis ex_least_nat_le not_less0)
 
 
-lemma r_cantor_n_cantor_ary: "f \<in> r_cantor_n n \<longleftrightarrow> (\<forall>i<n. f i \<in> {0,2})"
-proof(intro iffI conjI)
-  fix n
-  assume "f \<in> r_cantor_n n"
-  thus "\<forall>i<n. f i \<in> {0,2}"
-  proof(induction n arbitrary: f)
-    case (Suc n)
-    hence "f \<in> r_go_left ` r_cantor_n n \<or> f \<in> r_go_right ` r_cantor_n n" by simp
-    then obtain f' where "f' \<in> r_cantor_n n" and "f = r_go_left f' \<or> f = r_go_right f'" by auto
-    from Suc.IH[OF this(1)]
-    have "\<forall>i<n. f' i \<in> {0, 2}".
-    hence "\<forall>i<n. f (Suc i) \<in> {0, 2}"
-      using `f = _ \<or> f = _`
-      by (auto simp add:  r_go_left_def   r_go_right_def)
-    moreover
-    have "f 0 \<in> {0, 2}"
-      using `f = _ \<or> f = _`
-      by (auto simp add:  r_go_left_def   r_go_right_def)
-    ultimately
-    show ?case by (metis less_Suc_eq_0_disj)
-  qed simp
-next
-  fix n
-  assume "\<forall>i<n. f i \<in> {0, 2}"
-  thus "f \<in> r_cantor_n n"
-  proof(induction n arbitrary: f)
-    case 0 thus ?case by simp
-  next
-    case (Suc n)
-    hence "f 0 = 0 \<or> f 0 = 2" by simp
-    hence "f = r_go_left (\<lambda> i. f (Suc i)) \<or> f =  r_go_right (\<lambda> i. f (Suc i))"
-      by (auto simp add:  r_go_left_def   r_go_right_def)
-    moreover
-    from Suc.prems
-    have "(\<lambda> i. f (Suc i)) \<in> r_cantor_n n"
-      by (auto intro!: Suc.IH)
-    ultimately
-    show "f \<in> r_cantor_n (Suc n)" by auto
-  qed
-qed
-  
-
-lemma r_cantor_zero_or_two: "f \<in> r_cantor \<longleftrightarrow> (\<forall> i. f i \<in> {0,2})"
-proof-
-  have "f \<in> r_cantor \<longleftrightarrow> (\<forall>n. f \<in> r_cantor_n n)" by (auto simp add: r_cantor_def)
-  also have "\<dots> \<longleftrightarrow> (\<forall>n. (\<forall>i<n. f i \<in> {0,2}))" unfolding r_cantor_n_cantor_ary..
-  also have "\<dots> \<longleftrightarrow> (\<forall>n. f n \<in> {0,2})" by auto
-  finally show ?thesis.
-qed
 
 lemma to_real_inj: "inj_on to_real r_cantor"
 proof (rule inj_onI)
@@ -405,6 +410,7 @@ proof (rule inj_onI)
   qed
 qed
 
+subsubsection {* Surjectivity *}
 
 lemma suminf_split_first:
   assumes "summable (f :: nat \<Rightarrow> real)"
@@ -625,6 +631,8 @@ next
     show "x \<in> to_real ` r_cantor" by auto
   qed
 qed
+
+subsubsection {* The bijection *}
 
 theorem "bij_betw to_real r_cantor cantor"
   by (rule bij_betw_imageI[OF to_real_inj to_real_surj])
