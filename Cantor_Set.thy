@@ -22,20 +22,17 @@ qed
 
 subsection {* Representing reals from [0,1] to base n *}
 
-definition n_ary :: "nat \<Rightarrow> (nat \<Rightarrow> nat) \<Rightarrow> bool" where
-  "n_ary n f \<longleftrightarrow> n > 1 \<and> range f \<subseteq> {0..<n}"
-lemmas n_aryI = n_ary_def[THEN iffD2]
-lemma n_ary_n_gt_1[simp]: "n_ary n f \<Longrightarrow> n > 1"
-  by (simp add:n_ary_def)
-lemma le_diff_1[simp]: "(n::nat) < m \<Longrightarrow> n \<le> m - 1"
-  by (metis Suc_diff_1 Suc_leI le_less_trans not_less zero_less_Suc)
-lemma n_ary_le[simp]: "n_ary n f \<Longrightarrow> f i \<le> n - 1"
-  by (rule le_diff_1, auto simp:n_ary_def image_def)
-lemma n_ary_less[simp]: "n_ary n f \<Longrightarrow> f i < n"
-  by (auto simp add: n_ary_def, metis UNIV_I atLeast0LessThan image_eqI lessThan_iff subsetCE)
+locale ary =
+  fixes n :: nat
+  assumes ng1: "n > 1"
+begin 
 
-definition n_ary_series :: "nat \<Rightarrow> (nat \<Rightarrow> nat) \<Rightarrow> nat \<Rightarrow> real" where
-  "n_ary_series n f = (\<lambda>k. f k * (1 / n) ^ Suc k)"
+text {*
+The mod n is a trick to do something slightly more useful when the input has digits outside
+the range.
+*}
+definition n_ary_series :: "(nat \<Rightarrow> nat) \<Rightarrow> nat \<Rightarrow> real" where
+  "n_ary_series f = (\<lambda>k. real (f k mod n) * (1 / n) ^ Suc k)"
 declare power_Suc[simp del]
 
 lemma summable_geometric': "norm (c::real) < 1 \<Longrightarrow> summable (\<lambda>k. c ^ (Suc k))"
@@ -50,13 +47,18 @@ lemma suminf_geometric': "norm (c::real) < 1 \<Longrightarrow> (\<Sum>n. c ^ Suc
   apply (subst mult_right_cancel[of "1 - c", symmetric])
   by (auto simp:left_diff_distrib)
 
+lemma n_ary_series_div[simp]: "n_ary_series f i / n = n_ary_series (\<lambda> i. f (i - 1)) (Suc i)"
+  unfolding n_ary_series_def
+  by (simp add: power_Suc)
+
 text {* The n-ary representation of 1. *}
-definition "period_one n \<equiv> n_ary_series n (\<lambda>_. n - 1)"
+definition "period_one \<equiv> n_ary_series (\<lambda>_. n - 1)"
 
-lemma period_one_summable[simp]: "n > 1 \<Longrightarrow> summable (period_one n)"
-  by (auto simp:n_ary_series_def period_one_def intro!:summable_geometric' summable_mult)
+lemma period_one_summable[simp]: "summable period_one"
+  using ng1 by (auto simp:n_ary_series_def period_one_def intro!:summable_geometric' summable_mult)
 
-lemma suminf_period_one_1[simp]: "n > 1 \<Longrightarrow> suminf (period_one n) = 1"
+lemma suminf_period_one_1[simp]: "suminf period_one = 1"
+  using ng1
   unfolding period_one_def n_ary_series_def
   apply (subst suminf_mult)
   apply (rule summable_geometric')
@@ -65,55 +67,51 @@ lemma suminf_period_one_1[simp]: "n > 1 \<Longrightarrow> suminf (period_one n) 
   by (auto simp:right_diff_distrib)
 
 lemma period_one_skip_initial_segment[simp]:
-  "n > 1 \<Longrightarrow> (\<Sum>k. period_one n (k + i)) = (1/n) ^ i * suminf (period_one n)"
+  "(\<Sum>k. period_one (k + i)) = (1/n) ^ i * suminf period_one"
   by (subst suminf_mult[symmetric], simp, rule arg_cong[where f=suminf], auto simp:period_one_def n_ary_series_def power_Suc power_add)
 
 lemma n_ary_summable[simp]:
-  assumes "n_ary n f"
-  shows "summable (n_ary_series n f)"
-proof (rule summableI_nonneg_bounded[where x="suminf (period_one n)"])
+  shows "summable (n_ary_series f)"
+proof (rule summableI_nonneg_bounded[where x="suminf period_one"])
   fix k
-  show "0 \<le> n_ary_series n f k" using assms by (auto simp:n_ary_def n_ary_series_def intro!:mult_nonneg_nonneg)
-  have "setsum (n_ary_series n f) {..<k} \<le> setsum (period_one n) {..<k}"
-    using assms n_ary_n_gt_1[OF assms]
-    by (auto simp:n_ary_series_def n_ary_le[simplified One_nat_def] period_one_def intro!:setsum_mono)
-  also have "... \<le> suminf (period_one n)" using assms
-    by - (rule setsum_le_suminf, rule period_one_summable, rule n_ary_n_gt_1, auto simp:period_one_def n_ary_series_def)
-  finally show "setsum (n_ary_series n f) {..<k} \<le> suminf (period_one n)" .
+  show "0 \<le> n_ary_series f k" using assms by (auto simp: n_ary_series_def intro!:mult_nonneg_nonneg)
+  have "setsum (n_ary_series f) {..<k} \<le> setsum (period_one) {..<k}"
+    using assms ng1
+    by (auto simp:n_ary_series_def period_one_def intro!:setsum_mono)
+       (metis Suc_pred mod_less_divisor neq0_conv not_less not_less_eq old.nat.distinct(2))
+  also have "... \<le> suminf period_one" using assms
+    by -(intro setsum_le_suminf period_one_summable,
+         auto intro: simp:period_one_def n_ary_series_def)
+  finally show "setsum (n_ary_series f) {..<k} \<le> suminf period_one" .
 qed
 
-lemma nary_pos[simp]: "n_ary n f \<Longrightarrow> suminf (n_ary_series n f) \<ge> 0"
+lemma nary_pos[simp]: "suminf (n_ary_series f) \<ge> 0"
   by (rule suminf_nonneg, simp) (auto simp:n_ary_series_def)
 
 lemma nary_le_1[simp]:
-  assumes "n_ary n f"
-  shows "suminf (n_ary_series n f) \<le> 1"
+  shows "suminf (n_ary_series f) \<le> 1"
 proof-
-  have "suminf (n_ary_series n f) \<le> suminf (period_one n)"
+  have "suminf (n_ary_series f) \<le> suminf period_one"
   proof (rule suminf_le, rule)
     fix i
-    from `n_ary n f` have "f i < n" by simp
-    thus "n_ary_series n f i \<le> period_one n i" 
+    from ng1 have "f i mod n < n" by simp
+    thus "n_ary_series f i \<le> period_one i" 
       unfolding n_ary_series_def period_one_def  by auto
   next
-    show "summable (n_ary_series n f)" by (rule n_ary_summable[OF assms])
+    show "summable (n_ary_series f)" by (rule n_ary_summable)
   next
-    show "summable (period_one n)" by (rule period_one_summable[OF n_ary_n_gt_1[OF assms]])
+    show "summable period_one" by (rule period_one_summable)
   qed
-  also have "\<dots> = 1" by (rule suminf_period_one_1[OF n_ary_n_gt_1[OF assms]])
+  also have "\<dots> = 1" by (rule suminf_period_one_1)
   finally show ?thesis.
 qed
+
 subsection {* The n-arity expansion of a real *}
 
-fun to_nary :: "nat \<Rightarrow>  real \<Rightarrow> (nat \<Rightarrow> nat)"
- where "to_nary n x i = (if x = 1 then n - 1 else natfloor (x * n^(Suc i)) mod n)"
+fun to_nary :: "real \<Rightarrow> (nat \<Rightarrow> nat)"
+ where "to_nary x i = (if x = 1 then n - 1 else natfloor (x * n^(Suc i)) mod n)"
 
-lemma n_ary_to_nary[simp]: "n > 1 \<Longrightarrow> n_ary n (to_nary n x)"
-  unfolding n_ary_def by auto
-
-lemma summable_to_nary[simp]: "n > 1 \<Longrightarrow> summable (n_ary_series n (to_nary n x))"
-  by (metis n_ary_summable n_ary_to_nary)
-
+(* Generalized Real.natfloor_div_nat, included in the main library since Oct 2014. *)
 lemma natfloor_div_nat:
   assumes "y > 0"
   shows "natfloor (x / real y) = natfloor x div y"
@@ -141,43 +139,42 @@ proof-
 qed
 
 lemma natfloor_mod:
-  assumes "n > 1"
+  fixes x :: real
   shows "n * natfloor x + natfloor (n * x) mod n = natfloor (n * x)"
 proof-
   have "natfloor (n * x) = n * (natfloor (n * x) div n) + natfloor (n * x) mod n"
     by (metis mod_div_equality2)
   also have "natfloor (n * x) div n = natfloor (n * x / n)"
     apply (rule natfloor_div_nat[symmetric])
-    using assms by auto
-  also have "n * x / n = x" using assms by simp
+    using ng1 by auto
+  also have "n * x / n = x" using ng1 by simp
   finally show ?thesis..
 qed
 
-
 lemma partial_n_ary:
-  assumes [simp]: "n > 1"
+  fixes x :: real
   assumes "0 \<le> x" "x < 1"
-  shows "setsum (n_ary_series n (to_nary n x)) {..<i} = natfloor (x * n^i) / n^i"
+  shows "setsum (n_ary_series (to_nary x)) {..<i} = natfloor (x * n^i) / n^i"
 proof (induction i)
   case 0
   from assms have "natfloor x = 0" by (auto intro: natfloor_eq)
   thus ?case by simp
 next
   case (Suc i)
-    have "setsum (n_ary_series n (to_nary n x)) {..<Suc i}
-      =  setsum (n_ary_series n (to_nary n x)) {..<i} + n_ary_series n (to_nary n x) i"
+    have "setsum (n_ary_series (to_nary x)) {..<Suc i}
+      =  setsum (n_ary_series (to_nary x)) {..<i} + n_ary_series (to_nary x) i"
      by simp
-   also have "\<dots> = natfloor (x * real n ^ i) / real n ^ i + n_ary_series n (to_nary n x) i"
+   also have "\<dots> = natfloor (x * real (n ^ i)) / real (n ^ i) + n_ary_series (to_nary x) i"
      unfolding Suc.IH..
    also have "\<dots> = natfloor (x * n ^ i) /  n ^ i + (natfloor (x * n ^ Suc i) mod n) / n ^ Suc i"
-     using assms(3) by (simp add: n_ary_series_def field_simps)
+     using assms(2) by (simp add: n_ary_series_def field_simps)
    also have "\<dots> = (n * natfloor (x * n ^ i) + natfloor (n * (x * n ^ i)) mod n) / n ^ Suc i"
-     using `n > 1` by (simp add: field_simps power_Suc)
+     using ng1 by (simp add: field_simps power_Suc)
    also have "\<dots> = natfloor (n * (x * n^i)) / n^Suc i"
-     unfolding natfloor_mod[OF assms(1)] ..
+     unfolding natfloor_mod..
    also have "\<dots> = natfloor (x * n^(Suc i)) / n^Suc i" by (simp add: power_Suc field_simps)
    finally
-   show ?case by (metis power_real_of_nat)
+   show ?case.
 qed
 
 lemma bounded_0_inverse:
@@ -202,16 +199,16 @@ next
 qed
 
 lemma suminf_n_ary_series_to_nary:
-  assumes [simp]:"n > 1"
+  fixes x :: real
   assumes "0 \<le> x" "x \<le>1"
-  shows "suminf (n_ary_series n (to_nary n x)) = x"
+  shows "suminf (n_ary_series (to_nary x)) = x"
 proof(cases "x = 1")
-  case False with assms(3) have "x < 1" by simp
+  case False with assms(2) have "x < 1" by simp
 
-  have "suminf (n_ary_series n (to_nary n x)) = lim (\<lambda>i. setsum (n_ary_series n (to_nary n x)) {..<i})"
+  have "suminf (n_ary_series (to_nary x)) = lim (\<lambda>i. setsum (n_ary_series (to_nary x)) {..<i})"
     by (rule suminf_eq_lim)
   also have "\<dots> = lim (\<lambda>i. natfloor (x * n^i) / n^i)"
-    unfolding partial_n_ary[OF assms(1,2) `x < 1`] by simp
+    unfolding partial_n_ary[OF assms(1) `x < 1` ] by simp
   also have "\<dots> = x"
   proof(rule limI)
     have "(\<lambda>i. x - (natfloor (x * (n ^ i))) / (n ^ i)) ----> 0"
@@ -220,16 +217,16 @@ proof(cases "x = 1")
       have "natfloor (x * (n^i)) \<le> x * (n^i)" 
           using assms by (simp add: real_natfloor_le field_simps)
       thus "0 \<le> x - natfloor (x * (n^i)) / (n^i)" 
-          using assms(1) by (simp add: field_simps)
+          using ng1 by (simp add: field_simps)
     next
       fix i 
       have "x * (n^i) - natfloor (x * (n^i)) \<le> 1"
          by (metis comm_monoid_diff_class.diff_cancel le_natfloor_eq_one less_eq_real_def natfloor_neg natfloor_one natfloor_subtract not_le power_0 power_eq_0_iff)
       from divide_right_mono[OF this, where c = "n^i"] assms(1)
       show "x - natfloor (x * (n ^ i)) / (n ^ i) \<le> 1 * (1/n)^i"
-        using assms(1) by (simp add: field_simps )
+        using ng1 by (simp add: field_simps )
     next
-      show "1/n < 1" using assms(1) by auto
+      show "1/n < 1" using ng1 by auto
     next
       show "0 < (1::real)" by auto
     qed
@@ -239,11 +236,14 @@ proof(cases "x = 1")
   finally show ?thesis.
 next
   case True
-  hence "to_nary n x = (\<lambda>i. n - 1)" by auto
+  hence "to_nary x = (\<lambda>i. n - 1)" by auto
   thus ?thesis
-    using True suminf_period_one_1[OF assms(1), unfolded period_one_def]
-    by simp
+    using True suminf_period_one_1[unfolded period_one_def] by simp
 qed
+end
+
+text {* We only really need this with @{term "n = 3"} there: *}
+interpretation ary 3 by default auto
 
 subsection {* A cantor-like set on the representations *}
 
@@ -253,80 +253,63 @@ definition r_go_right :: "(nat \<Rightarrow> nat) \<Rightarrow> (nat \<Rightarro
   where "r_go_right f= (\<lambda> i. if i = 0 then 2 else f (i - 1))" 
 
 fun r_cantor_n where
-  "r_cantor_n 0 = {f . n_ary 3 f}"
+  "r_cantor_n 0 = UNIV"
 | "r_cantor_n (Suc n) = r_go_left ` r_cantor_n n \<union> r_go_right ` r_cantor_n n"
 definition "r_cantor \<equiv> \<Inter>range r_cantor_n"
 
 subsection {* A bijection between the Cantor Set and a subset of ternary representations *}
 
-definition "cantor_ary f \<equiv> n_ary 3 f \<and> (\<forall>i. f i \<noteq> 1)"
+definition cantor_ary :: "(nat \<Rightarrow> nat) \<Rightarrow> bool" 
+  where "cantor_ary f = (\<forall>i. f i \<in> {0,2})"
 
 lemma cantor_aryI:
   assumes "\<And> i. f i \<in> {0,2}"
   shows "cantor_ary f"
-  using assms
-  unfolding cantor_ary_def
-  apply (auto simp add: n_ary_def)
-  apply (metis Suc_le_eq eval_nat_numeral(3) order_refl zero_less_numeral)
-  apply (metis (no_types) Suc_1 n_not_Suc_n numeral_1_eq_Suc_0 numeral_One)
-  done
+  using assms  unfolding cantor_ary_def by auto
  
 lemma cantor_aryE:
   assumes "cantor_ary f"
   shows "f i \<in> {0,2}"
-proof-
-  from assms have "f i \<noteq> 1" "f i \<in> {0..<3}" by (auto simp only:n_ary_def cantor_ary_def)
-  thus ?thesis by auto
-qed
+using assms  unfolding cantor_ary_def by auto 
 
 definition to_real :: "(nat \<Rightarrow> nat) \<Rightarrow> real"
-  where "to_real = (\<lambda> f. suminf (n_ary_series 3 f))"
-
+  where "to_real = (\<lambda> f. suminf (n_ary_series f))"
 
 lemma to_real_inj_aux:
-  assumes [simp]: "n_ary 3 a"
-  assumes [simp]: "n_ary 3 b"
   assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
   assumes ord: "a i < b i" "\<forall>j<i. a j = b j"
   assumes eq: "to_real a = to_real b"
   shows False
 proof-
   have[simp]: "a i = 0" "b i = 2" using ord(1) cantor_at_i by auto
-  have[simp]: "n_ary_series 3 b i = 2 * (1/3) ^ Suc i" by (auto simp:n_ary_series_def)
+  have[simp]: "n_ary_series b i = 2 * (1/3) ^ Suc i" by (auto simp:n_ary_series_def)
 
-  note summable_ignore_initial_segment[simp]
-  note add_Suc_right[simp del]
+  note sm = summable_ignore_initial_segment[OF n_ary_summable]
+            summable_ignore_initial_segment[OF period_one_summable]
 
-  have "suminf (n_ary_series 3 a) = (\<Sum>n. n_ary_series 3 a (n + i)) + setsum (n_ary_series 3 a) {..<i}"
-    by (rule suminf_split_initial_segment, simp)
-  also have "(\<Sum>n. n_ary_series 3 a (n + i)) = (\<Sum>n. n_ary_series 3 a (n + Suc i))"
-    by (subst suminf_split_initial_segment[where k=1]) (simp, simp add:n_ary_series_def add_Suc_right)
-  also have "... \<le> (\<Sum>n. period_one 3 (n + Suc i))"
-  proof-
-    have "\<And>i. a i \<le> 2"
-      using `n_ary 3 a` by (metis One_nat_def diff_Suc_Suc diff_zero eval_nat_numeral(3) n_ary_le)
-    hence "\<And>i. real (a i) \<le> 2"
-      by (metis antisym_conv linear natceiling_le_eq natceiling_numeral_eq real_of_nat_numeral) (* ok... *)
-    thus ?thesis by - (rule suminf_le, simp add:n_ary_series_def period_one_def, simp_all)
-  qed
-  also have "... = (1/3) ^ Suc i" by simp
+  have "suminf (n_ary_series a) = (\<Sum>n. n_ary_series a (n + i)) + setsum (n_ary_series a) {..<i}"
+    by (rule suminf_split_initial_segment[OF n_ary_summable])
+  also have "(\<Sum>n. n_ary_series a (n + i)) = (\<Sum>n. n_ary_series a (n + Suc i))"
+    by (subst suminf_split_initial_segment[OF sm(1), where k=1]) (simp add:n_ary_series_def)
+  also have "... \<le> (\<Sum>n. period_one (n + Suc i))"
+    by (rule suminf_le[OF _ sm]) (auto simp add: n_ary_series_def period_one_def)
+  also have "... = (1/3) ^ Suc i" by (simp del: add_Suc_right)
   also have "... < 2 * (1/3) ^ Suc i" by simp
-  also have "... \<le> (\<Sum>n. n_ary_series 3 b (n + i))"
+  also have "... \<le> (\<Sum>n. n_ary_series b (n + i))"
   proof-
-    have "0 \<le> (\<Sum>n. n_ary_series 3 b (n + Suc i))" by (rule suminf_nonneg, simp, simp add:n_ary_series_def)
-    thus ?thesis by (subst suminf_split_initial_segment[where k=1]) (auto simp add:add_Suc_right)
+    have "0 \<le> (\<Sum>n. n_ary_series b (n + Suc i))"
+    by (rule suminf_nonneg[OF sm(1)]) (simp add:n_ary_series_def)
+    thus ?thesis by (subst suminf_split_initial_segment[OF sm(1), where k=1]) auto
   qed
-  also have "... + setsum (n_ary_series 3 a) {..<i} = suminf (n_ary_series 3 b)"
+  also have "... + setsum (n_ary_series  a) {..<i} = suminf (n_ary_series b)"
   proof-
-    have 1: "setsum (n_ary_series 3 a) {..<i} = setsum (n_ary_series 3 b) {..<i}" using ord(2) by (auto simp:n_ary_series_def)
-    show ?thesis by (subst 1) (rule suminf_split_initial_segment[symmetric], simp)
+    have 1: "setsum (n_ary_series a) {..<i} = setsum (n_ary_series b) {..<i}" using ord(2) by (auto simp:n_ary_series_def)
+    show ?thesis by (subst 1) (rule suminf_split_initial_segment[OF n_ary_summable, symmetric])
   qed
   finally show False using eq  by (auto simp add: to_real_def)
 qed
 
 lemma to_real_inj_aux':
-  assumes "n_ary 3 a"
-  assumes "n_ary 3 b"
   assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
   assumes ne: "a i \<noteq> b i" "\<forall>j<i. a j = b j"
   assumes eq: "to_real a = to_real b"
@@ -337,20 +320,20 @@ proof-
   thus ?thesis
   proof
     assume *: "a i < b i"
-    show False by (rule to_real_inj_aux[OF assms(1,2,3,4) * assms(6,7)])
+    show False by (rule to_real_inj_aux[OF assms(1,2) * assms(4,5)])
   next
     assume *: "b i < a i"
+    note assms(2,1) *
     moreover
     from ne(2) have "\<forall>j<i. b j = a j" by auto
     moreover
     note eq[symmetric]
     ultimately
-    show False by (rule  to_real_inj_aux[OF assms(2,1,4,3)])
+    show False by (rule to_real_inj_aux)
   qed
 qed
 
 lemma to_real_inj_next:
-  assumes "n_ary 3 a" "n_ary 3 b"
   assumes cantor_at_i: "a i \<in> {0,2}"  "b i \<in> {0,2}" 
   assumes eq_so_far: "\<forall>j<i. a j = b j"
   assumes eq: "to_real a = to_real b"
@@ -375,77 +358,15 @@ proof (rule inj_onI, simp del:One_nat_def)
     from ex_least[of "\<lambda>j. a j \<noteq> b j", OF this]
     obtain i where i: "a i \<noteq> b i" "\<forall>j<i. a j = b j" by auto
 
-    from asms have "n_ary 3 a" "n_ary 3 b" by (auto simp:cantor_ary_def)
-    from this cantor_aryE[OF asms(1)] cantor_aryE[OF asms(2)] i asms(3)
+    from cantor_aryE[OF asms(1)] cantor_aryE[OF asms(2)] i asms(3)
     show False by (rule to_real_inj_aux')
   qed
 qed
 
-definition "left_points n = {setsum (n_ary_series 3 f) {0..<n} |f. n_ary 3 f \<and> (\<forall>k \<in> {0..<n}. f k \<in> {0,2})}"
-abbreviation "segment n l \<equiv> {l..l+(1/3)^n}"
-
-lemma image_Union': "f ` \<Union>A = \<Union>((op ` f) ` A)" by auto
-
-lemma "cantor_n n = \<Union>(segment n ` left_points n)"
-proof (induct n)
-  case 0
-  have "n_ary 3 (\<lambda>_. 0)" by (auto simp:n_ary_def)
-  hence "left_points 0 = {0}" by (auto simp:left_points_def)
-  thus ?case by auto
-next
-  case (Suc n)
-  have "\<And>(x::real) c A. x \<in> (\<lambda>x. c + x/3) ` A \<longleftrightarrow> x-c \<in> (\<lambda>x. x/3) ` A" by (auto intro!:image_eqI)
-  hence 1: "\<And>c. op ` (\<lambda>(x::real). c + x / 3) \<circ> segment n = segment (Suc n) \<circ> (\<lambda>x. c + x / 3)" by - (rule ext, auto simp:power_Suc)
-  have "(\<lambda>x. x/3) ` cantor_n n = \<Union>(segment (Suc n) ` (\<lambda>x. x/3) ` left_points n)"
-   by (simp only:Suc.hyps image_Union') (rule arg_cong[where f=Union], simp add:image_comp 1[of 0, simplified])
-  moreover have "(\<lambda>x. 2/3 + x/3) ` cantor_n n = \<Union>(segment (Suc n) ` (\<lambda>x. 2/3 + x/3) ` left_points n)"
-    by (simp only:Suc.hyps image_Union') (rule arg_cong[where f=Union], simp add:image_comp 1)
-  ultimately show ?case
-    apply (simp add:Union_Un_distrib[symmetric] del:Sup_image_eq Union_Un_distrib)
-    apply (rule arg_cong[where f=Union])
-    apply auto
-oops
-
-lemma "cantor = (suminf \<circ> n_ary_series 3) ` {f. cantor_ary f}"
-proof(intro set_eqI iffI)
-  fix x
-  assume "x \<in> cantor"
-
-  have "cantor_ary (to_nary 3 x)" sorry
-  moreover
-  from `x \<in> cantor` have "1 < (3::nat)" and  "0 \<le> x" and "x \<le> 1"
-    by (auto dest: cantor_bounds)
-  hence "x = suminf (n_ary_series 3 (to_nary 3 x))" by (rule suminf_n_ary_series_to_nary[symmetric])
-  ultimately
-  show "x \<in> (suminf \<circ> n_ary_series 3) ` {f. cantor_ary f}" by auto
-next
-  fix x 
-  assume "x \<in> (suminf \<circ> n_ary_series 3) ` {f. cantor_ary f}"
-  then obtain f where "x = suminf (n_ary_series 3 f)" and "cantor_ary f" by auto
-  {
-  fix n
-  have "x \<in> cantor_n n"
-
-  
-  
-oops
-
-theorem "bij_betw (suminf \<circ> n_ary_series 3) {f. cantor_ary f} cantor"
-oops
-
-subsection {* Alternative approach *}
 
 
-lemma n_ary_go_left[simp]: "n_ary 3 f \<Longrightarrow> n_ary 3 (r_go_left f)"
-  by (auto simp add: n_ary_def r_go_left_def)
-lemma n_ary_go_right[simp]: "n_ary 3 f \<Longrightarrow> n_ary 3 (r_go_right f)"
-  by (auto simp add: n_ary_def r_go_right_def)
-
-lemma r_cantor_n_n_ary[simp]: "f \<in> r_cantor_n n \<Longrightarrow>  n_ary 3 f"
-  by (induction n arbitrary: f) auto
-
-lemma r_cantor_n_cantor_ary: "f \<in> r_cantor_n n \<longleftrightarrow> n_ary 3 f \<and> (\<forall>i<n. f i \<in> {0,2})"
-proof(intro iffI conjI, erule_tac [3] conjE)
+lemma r_cantor_n_cantor_ary: "f \<in> r_cantor_n n \<longleftrightarrow> (\<forall>i<n. f i \<in> {0,2})"
+proof(intro iffI conjI)
   fix n
   assume "f \<in> r_cantor_n n"
   thus "\<forall>i<n. f i \<in> {0,2}"
@@ -467,11 +388,7 @@ proof(intro iffI conjI, erule_tac [3] conjE)
   qed simp
 next
   fix n
-  assume "f \<in> r_cantor_n n"
-  thus "n_ary 3 f" by (rule r_cantor_n_n_ary)
-next
-  fix n
-  assume "n_ary 3 f" and  "\<forall>i<n. f i \<in> {0, 2}"
+  assume "\<forall>i<n. f i \<in> {0, 2}"
   thus "f \<in> r_cantor_n n"
   proof(induction n arbitrary: f)
     case 0 thus ?case by simp
@@ -483,7 +400,7 @@ next
     moreover
     from Suc.prems
     have "(\<lambda> i. f (Suc i)) \<in> r_cantor_n n"
-      by (auto intro!: Suc.IH simp add: n_ary_def)
+      by (auto intro!: Suc.IH)
     ultimately
     show "f \<in> r_cantor_n (Suc n)" by auto
   qed
@@ -493,8 +410,8 @@ qed
 lemma r_cantor_cantor_ary:"f \<in> r_cantor \<longleftrightarrow> cantor_ary f"
 proof-
   have "f \<in> r_cantor \<longleftrightarrow> (\<forall>n. f \<in> r_cantor_n n)" by (auto simp add: r_cantor_def)
-  also have "\<dots> \<longleftrightarrow> (\<forall>n. n_ary 3 f \<and> (\<forall>i<n. f i \<in> {0,2}))" unfolding r_cantor_n_cantor_ary..
-  also have "\<dots> \<longleftrightarrow> n_ary 3 f \<and> (\<forall>n. f n \<in> {0,2})" by auto
+  also have "\<dots> \<longleftrightarrow> (\<forall>n. (\<forall>i<n. f i \<in> {0,2}))" unfolding r_cantor_n_cantor_ary..
+  also have "\<dots> \<longleftrightarrow> (\<forall>n. f n \<in> {0,2})" by auto
   also have "\<dots> \<longleftrightarrow> cantor_ary f" by (metis cantor_aryE cantor_aryI cantor_ary_def)
   finally show ?thesis.
 qed
@@ -502,10 +419,6 @@ qed
 lemma r_cantor_cantor_ary':"r_cantor = {f . cantor_ary f}"
   using r_cantor_cantor_ary by auto
 
-
-lemma n_ary_series_div[simp]: "n_ary_series n f i / n = n_ary_series n (\<lambda> i. f (i - 1)) (Suc i)"
-  unfolding n_ary_series_def
-  by (simp add: power_Suc)
 
 lemma suminf_split_first:
   assumes "summable (f :: nat \<Rightarrow> real)"
@@ -526,25 +439,18 @@ lemma suminf_shift:
 
 
 lemma to_real_go_right[simp]:
-  assumes "n_ary 3 f"
   shows "go_right (to_real f) = to_real (r_go_right f)"
 proof-
-  from assms
-  have "summable (n_ary_series 3 f)" by (metis n_ary_summable)
-  from assms
-  have "n_ary 3 (\<lambda>i. f (i - 1))" by (auto simp add: n_ary_def)
-  hence "summable (n_ary_series 3 (\<lambda>i. f (i - 1)))" by (metis n_ary_summable)
-
   have "go_right (to_real f) = 2/3 + to_real f / 3" by (simp add: go_right_def)
-  also have "\<dots> = 2/3 + (\<Sum>i. n_ary_series 3 f i) / 3" by (simp add: to_real_def)
-  also have "\<dots> = 2/3 + (\<Sum>i. n_ary_series 3 f i / 3)" by (rule arg_cong[OF suminf_divide[symmetric]]) fact
-  also have "\<dots> = 2/3 + (\<Sum>i. n_ary_series 3 (\<lambda> i. f (i - 1)) (Suc i))"
+  also have "\<dots> = 2/3 + (\<Sum>i. n_ary_series f i) / 3" by (simp add: to_real_def)
+  also have "\<dots> = 2/3 + (\<Sum>i. n_ary_series f i / 3)" unfolding suminf_divide[OF n_ary_summable, symmetric]..
+  also have "\<dots> = 2/3 + (\<Sum>i. n_ary_series (\<lambda> i. f (i - 1)) (Suc i))"
     by (metis n_ary_series_div real_of_nat_numeral)
-  also have "\<dots> = (\<Sum>i. if i = 0 then 2/3 else n_ary_series 3 (\<lambda> i. f (i - 1)) i)"
-    by (rule suminf_shift) fact
-  also have "\<dots> = (\<Sum>i. n_ary_series 3 (\<lambda> i. if i = 0 then 2 else f (i - 1)) i)"
+  also have "\<dots> = (\<Sum>i. if i = 0 then 2/3 else n_ary_series (\<lambda> i. f (i - 1)) i)"
+    by (rule suminf_shift[OF n_ary_summable])
+  also have "\<dots> = (\<Sum>i. n_ary_series (\<lambda> i. if i = 0 then 2 else f (i - 1)) i)"
     by (rule arg_cong[where f = suminf]) (auto simp add: n_ary_series_def power_Suc)
-  also have "\<dots> = (\<Sum>i. n_ary_series 3 (r_go_right f) i)"
+  also have "\<dots> = (\<Sum>i. n_ary_series (r_go_right f) i)"
     by (simp add: r_go_right_def)
   also have "\<dots> = to_real (r_go_right f)"
     by (simp add: to_real_def)
@@ -553,27 +459,20 @@ qed
 
 
 lemma to_real_go_left[simp]:
-  assumes "n_ary 3 f"
   shows "go_left (to_real f) = to_real (r_go_left f)"
 proof-
-  from assms
-  have "summable (n_ary_series 3 f)" by (metis n_ary_summable)
-  from assms
-  have "n_ary 3 (\<lambda>i. f (i - 1))" by (auto simp add: n_ary_def)
-  hence "summable (n_ary_series 3 (\<lambda>i. f (i - 1)))" by (metis n_ary_summable)
-
   have "go_left (to_real f) = to_real f / 3" by (simp add: go_left_def)
-  also have "\<dots> = (\<Sum>i. n_ary_series 3 f i) / 3" by (simp add: to_real_def)
-  also have "\<dots> = (\<Sum>i. n_ary_series 3 f i / 3)" by (rule suminf_divide[symmetric]) fact
-  also have "\<dots> = (\<Sum>i. n_ary_series 3 (\<lambda> i. f (i - 1)) (Suc i))"
+  also have "\<dots> = (\<Sum>i. n_ary_series f i) / 3" by (simp add: to_real_def)
+  also have "\<dots> = (\<Sum>i. n_ary_series f i / 3)" by (rule suminf_divide[OF n_ary_summable, symmetric])
+  also have "\<dots> = (\<Sum>i. n_ary_series (\<lambda> i. f (i - 1)) (Suc i))"
     by (metis n_ary_series_div real_of_nat_numeral)
-  also have "\<dots> = 0 + (\<Sum>i. n_ary_series 3 (\<lambda> i. f (i - 1)) (Suc i))"
+  also have "\<dots> = 0 + (\<Sum>i. n_ary_series (\<lambda> i. f (i - 1)) (Suc i))"
     by simp
-  also have "\<dots> = (\<Sum>i. if i = 0 then 0 else n_ary_series 3 (\<lambda> i. f (i - 1)) i)"
-    by (rule suminf_shift) fact
-  also have "\<dots> = (\<Sum>i. n_ary_series 3 (\<lambda> i. if i = 0 then 0 else f (i - 1)) i)"
+  also have "\<dots> = (\<Sum>i. if i = 0 then 0 else n_ary_series (\<lambda> i. f (i - 1)) i)"
+    by (rule suminf_shift[OF n_ary_summable])
+  also have "\<dots> = (\<Sum>i. n_ary_series (\<lambda> i. if i = 0 then 0 else f (i - 1)) i)"
     by (rule arg_cong[where f = suminf])  (auto simp add: n_ary_series_def)
-  also have "\<dots> = (\<Sum>i. n_ary_series 3 (r_go_left f) i)"
+  also have "\<dots> = (\<Sum>i. n_ary_series (r_go_left f) i)"
     by (simp add: r_go_left_def)
   also have "\<dots> = to_real (r_go_left f)"
     by (simp add: to_real_def)
@@ -582,34 +481,27 @@ qed
 
 (* This is basically the main theorem, for a simpler set :-) *)
 lemma interval_covered:
-  assumes "n > 1"
-  shows "{0..1} = (\<lambda> f. suminf (n_ary_series n f)) ` {f. n_ary n f}"
+  shows "{0..1} = range to_real"
 proof(intro set_eqI iffI)
   fix x
-  assume "x \<in> (\<lambda> f. suminf (n_ary_series n f)) ` {f. n_ary n f}"
-  then obtain f where "x = suminf (n_ary_series n f)" and "n_ary n f" by auto
-  from nary_pos[OF `n_ary n f`] nary_le_1[OF `n_ary n f`]
-  have "0 \<le> suminf (n_ary_series n f)" and "suminf (n_ary_series n f) \<le> 1" by (simp_all add: to_real_def)
-  thus "x \<in> {0..1}" unfolding `x = suminf (n_ary_series n f)` by auto
+  assume "x \<in> range to_real"
+  thus "x \<in> {0..1}" by (auto simp add: to_real_def)
 next
   fix x :: real
   assume "x \<in> {0..1}" hence "0 \<le> x" and "x \<le> 1" by auto
 
-  have "x = suminf (n_ary_series n (to_nary n x))"
+  have "x = to_real (to_nary x)"
     unfolding to_real_def
     by (rule suminf_n_ary_series_to_nary[OF assms `0 \<le> x` `x \<le> 1`, symmetric])
-  moreover
-  have "n_ary n (to_nary n x)" by (rule n_ary_to_nary[OF assms])
-  ultimately
-  show "x \<in>  (\<lambda> f. suminf (n_ary_series n f)) ` {f. n_ary n f}" by auto
+  then
+  show "x \<in> range to_real" by auto
 qed
 
 lemma cantor_n_eq:  "cantor_n n = to_real` r_cantor_n n"
 proof(induction n)
   case 0 
   have "cantor_n 0  = {0..1}" by simp
-  also have "\<dots> = to_real ` {f. n_ary 3 f}" 
-    unfolding to_real_def by (rule interval_covered) simp
+  also have "\<dots> = range to_real" by (rule interval_covered)
   also have "\<dots> = to_real ` r_cantor_n 0" by simp
   finally show ?case.
 next
@@ -636,9 +528,6 @@ proof(induction n)
   case 0 show ?case by simp
 next
   case (Suc n)
-  from  `a \<in> r_cantor_n (Suc n)` `b \<in> r_cantor_n (Suc n)`
-  have "n_ary 3 a" and "n_ary 3 b" by (metis r_cantor_n_n_ary)+
-  moreover
   from `a \<in> r_cantor_n (Suc n)` `b \<in> r_cantor_n (Suc n)`
   have "a n \<in> {0,2}" and "b n \<in> {0,2}" unfolding r_cantor_n_cantor_ary by auto
   moreover
@@ -655,46 +544,40 @@ next
 qed
 
 lemma n_ary_series_diff:
-  assumes "n_ary 3 a" and  "n_ary 3 b"
-  shows "\<bar>n_ary_series 3 a n - n_ary_series 3 b n\<bar> \<le> (1/3)^n"
+  shows "\<bar>n_ary_series a k - n_ary_series b k\<bar> \<le> (1/3)^k"
 proof-
-  have "\<bar>n_ary_series 3 a n - n_ary_series 3 b n\<bar> = \<bar>real (a n) - real(b n)\<bar> * (1 / 3) ^ Suc n"
+  have "\<bar>n_ary_series a k - n_ary_series b k\<bar> = \<bar>real (a k mod 3) - real(b k mod 3)\<bar> * (1 / 3) ^ Suc k"
     unfolding n_ary_series_def by (auto simp add: field_simps)
   also
-  from assms have "\<bar>real (a n)\<bar> < 3" and  "\<bar>real (b n)\<bar> < 3" by auto
-  hence "\<bar>real (a n) - real(b n)\<bar> \<le> 3" by auto
-  also have "(3::real) * (1 / 3) ^ Suc n = (1/3)^n" by (simp add: power_Suc field_simps)
+   have "\<bar>real (a k mod 3)\<bar> < 3" and  "\<bar>real (b k mod 3)\<bar> < 3" by auto
+  hence "\<bar>real (a k mod 3) - real(b k mod 3)\<bar> \<le> 3" by auto
+  also have "(3::real) * (1 / 3) ^ Suc k = (1/3)^k" by (simp add: power_Suc field_simps)
   finally show ?thesis by this auto
 qed
 
 lemma to_real_cont:
-  assumes "n_ary 3 a" and  "n_ary 3 b"
   assumes "\<forall>j<n. a j = b j"
   shows "\<bar>to_real a - to_real b\<bar> \<le> 3 * (1 / 3) ^ n"
 proof-
-  note sm = n_ary_summable[OF assms(1)] n_ary_summable[OF assms(2)]
-  note sm' = summable_diff[OF sm]
+  note sm' = summable_diff[OF n_ary_summable n_ary_summable]
   have sm''': "summable (\<lambda>i. ((1 / 3)::real) ^ i)" by (rule summable_geometric) simp
   hence sm''': "summable (\<lambda>i.  (1/3 :: real) ^ (i + n))" by (metis summable_iff_shift[where k = n])
-  hence sm'': "summable (\<lambda>i. \<bar>n_ary_series 3 a (i + n) - n_ary_series 3 b (i + n)\<bar>)"
+  hence sm'': "summable (\<lambda>i. \<bar>n_ary_series a (i + n) - n_ary_series b (i + n)\<bar>)"
     apply (rule summable_rabs_comparison_test[rotated])
-    using n_ary_series_diff[OF assms(1,2)]
+    using n_ary_series_diff
     apply auto
     done
 
-  have "\<bar>to_real a - to_real b\<bar> = \<bar>(\<Sum>i. n_ary_series 3 a i - n_ary_series 3 b i)\<bar>"
-    unfolding to_real_def by (rule arg_cong[OF suminf_diff[OF sm]])
-  also have "\<dots> = \<bar>(\<Sum>i. n_ary_series 3 a (i + n) - n_ary_series 3 b (i + n)) + setsum (\<lambda> i. n_ary_series 3 a i - n_ary_series 3 b i) {..<n}\<bar>"
+  have "\<bar>to_real a - to_real b\<bar> = \<bar>(\<Sum>i. n_ary_series a i - n_ary_series b i)\<bar>"
+    unfolding to_real_def by (rule arg_cong[OF suminf_diff[OF n_ary_summable n_ary_summable]])
+  also have "\<dots> = \<bar>(\<Sum>i. n_ary_series a (i + n) - n_ary_series b (i + n)) + setsum (\<lambda> i. n_ary_series a i - n_ary_series b i) {..<n}\<bar>"
     by (rule arg_cong[OF suminf_split_initial_segment[OF sm']])
-  also have "\<dots> = \<bar>(\<Sum>i. n_ary_series 3 a (i + n) - n_ary_series 3 b (i + n))\<bar>"
-    using assms(3) by (auto simp add: n_ary_series_def)
-  also have "\<dots> \<le> (\<Sum>i. \<bar>n_ary_series 3 a (i + n) - n_ary_series 3 b (i + n)\<bar>)"
+  also have "\<dots> = \<bar>(\<Sum>i. n_ary_series a (i + n) - n_ary_series b (i + n))\<bar>"
+    using assms(1) by (auto simp add: n_ary_series_def)
+  also have "\<dots> \<le> (\<Sum>i. \<bar>n_ary_series a (i + n) - n_ary_series b (i + n)\<bar>)"
     by (rule summable_rabs[OF sm''])
   also have "\<dots> \<le> (\<Sum>i. (1/3::real)^(i + n))"
-    apply (rule suminf_le[OF _ sm'' sm'''])
-    apply (rule)
-    apply (rule n_ary_series_diff[OF assms(1,2)])
-    done
+    by (intro suminf_le[OF _ sm'' sm'''] allI n_ary_series_diff)
   also have "\<dots> = (\<Sum>i. (1/3::real)^i * (1/3::real)^n)"
     by (simp add: field_simps add: power_add)
   also have "\<dots> = (\<Sum>i. (1/3::real)^i) * (1/3::real)^n"
@@ -743,12 +626,8 @@ next
     next
       fix n :: nat
       
-      have "n_ary 3 f'" by (metis `cantor_ary f'` cantor_ary_def)
-      moreover
-      have "n_ary 3 (f n)" by (metis f(1) r_cantor_n_n_ary)
-      moreover
       have "\<forall>j<n. f' j = f n j"  by (auto simp add: f'_def *)
-      ultimately
+      then
       show "\<bar>to_real f' - to_real (f n)\<bar> \<le> 3* (1/3)^n" by (rule to_real_cont)
     next
       show "1/3 < (1::real)" by auto
@@ -766,10 +645,7 @@ qed
 lemmas cantor_ary_surj = to_real_surj[symmetric, unfolded r_cantor_cantor_ary']
 
 theorem "bij_betw to_real {f. cantor_ary f} cantor"
-  apply (rule bij_betw_imageI)
-  apply (rule cantor_ary_inj)
-  apply (rule cantor_ary_surj)
-  done
+  by (rule bij_betw_imageI[OF cantor_ary_inj cantor_ary_surj])
 
 subsection {* A space-filling curve *}
 
