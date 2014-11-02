@@ -645,6 +645,12 @@ proof
   qed
 qed
 
+lemma fill_1_combine: "fill_1 (combine x y) = x"
+  by (auto simp add: fill_1_def combine_def)
+
+lemma fill_2_combine: "fill_2 (combine x y) = y"
+  by rule (auto simp add: fill_2_def combine_def, arith)
+  
 
 definition fill :: "real \<Rightarrow> real \<times> real" where
   "fill x \<equiv> (to_real (fill_1 (from_real x)), to_real (fill_2 (from_real x)))"
@@ -657,7 +663,8 @@ lemma fill_1_r_cantor: "f \<in> r_cantor \<Longrightarrow> fill_1 f \<in> r_cant
     unfolding r_cantor_zero_or_two by (auto simp add: fill_1_def)
 lemma fill_2_r_cantor: "f \<in> r_cantor \<Longrightarrow> fill_2 f \<in> r_cantor"
     unfolding r_cantor_zero_or_two by (auto simp add: fill_2_def)
-
+lemma combine_r_cantor: "x \<in> r_cantor \<Longrightarrow> y \<in> r_cantor \<Longrightarrow> combine x y \<in> r_cantor"
+    unfolding r_cantor_zero_or_two by (auto simp add: combine_def)
 
 lemma unfill_fill:
   assumes "x \<in> cantor"
@@ -672,6 +679,22 @@ proof-
   show ?thesis
     unfolding unfill_def fill_def
     by (simp add: the_inv_into_f_f[OF to_real_inj] combine_fill1_fill2
+                  f_the_inv_into_f[OF to_real_inj] to_real_surj assms)
+qed
+
+lemma full_unfill:
+  assumes "x \<in> cantor" and "y \<in> cantor"
+  shows "fill (unfill (x,y)) = (x,y)"
+proof-
+  from assms
+  have "from_real x \<in> r_cantor" "from_real y \<in> r_cantor"
+    by (metis order_refl the_inv_into_into to_real_inj to_real_surj)+
+  moreover
+  note combine_r_cantor[OF this]
+  ultimately
+  show ?thesis
+    unfolding unfill_def fill_def
+    by (simp add: the_inv_into_f_f[OF to_real_inj] fill_1_combine fill_2_combine
                   f_the_inv_into_f[OF to_real_inj] to_real_surj assms)
 qed
 
