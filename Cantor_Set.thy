@@ -328,6 +328,54 @@ proof-
   finally show ?thesis.
 qed
 
+subsubsection {* @{term to_real} is continuous (in a sense) *}
+
+lemma n_ary_series_diff:
+  shows "\<bar>n_ary_series a k - n_ary_series b k\<bar> \<le> (1/3)^k"
+proof-
+  have "\<bar>n_ary_series a k - n_ary_series b k\<bar> = \<bar>real (a k mod 3) - real(b k mod 3)\<bar> * (1 / 3) ^ Suc k"
+    unfolding n_ary_series_def by (auto simp add: field_simps)
+  also
+   have "\<bar>real (a k mod 3)\<bar> < 3" and  "\<bar>real (b k mod 3)\<bar> < 3" by auto
+  hence "\<bar>real (a k mod 3) - real(b k mod 3)\<bar> \<le> 3" by auto
+  also have "(3::real) * (1 / 3) ^ Suc k = (1/3)^k" by (simp add: power_Suc field_simps)
+  finally show ?thesis by this auto
+qed
+
+lemma to_real_cont:
+  assumes "\<forall>j<n. a j = b j"
+  shows "\<bar>to_real a - to_real b\<bar> \<le> 3 * (1 / 3) ^ n"
+proof-
+  note sm' = summable_diff[OF n_ary_summable n_ary_summable]
+  have sm''': "summable (\<lambda>i. ((1 / 3)::real) ^ i)" by (rule summable_geometric) simp
+  hence sm''': "summable (\<lambda>i.  (1/3 :: real) ^ (i + n))" by (metis summable_iff_shift[where k = n])
+  hence sm'': "summable (\<lambda>i. \<bar>n_ary_series a (i + n) - n_ary_series b (i + n)\<bar>)"
+    apply (rule summable_rabs_comparison_test[rotated])
+    using n_ary_series_diff
+    apply auto
+    done
+
+  have "\<bar>to_real a - to_real b\<bar> = \<bar>(\<Sum>i. n_ary_series a i - n_ary_series b i)\<bar>"
+    unfolding to_real_def by (rule arg_cong[OF suminf_diff[OF n_ary_summable n_ary_summable]])
+  also have "\<dots> = \<bar>(\<Sum>i. n_ary_series a (i + n) - n_ary_series b (i + n)) + setsum (\<lambda> i. n_ary_series a i - n_ary_series b i) {..<n}\<bar>"
+    by (rule arg_cong[OF suminf_split_initial_segment[OF sm']])
+  also have "\<dots> = \<bar>(\<Sum>i. n_ary_series a (i + n) - n_ary_series b (i + n))\<bar>"
+    using assms(1) by (auto simp add: n_ary_series_def)
+  also have "\<dots> \<le> (\<Sum>i. \<bar>n_ary_series a (i + n) - n_ary_series b (i + n)\<bar>)"
+    by (rule summable_rabs[OF sm''])
+  also have "\<dots> \<le> (\<Sum>i. (1/3::real)^(i + n))"
+    by (intro suminf_le[OF _ sm'' sm'''] allI n_ary_series_diff)
+  also have "\<dots> = (\<Sum>i. (1/3::real)^i * (1/3::real)^n)"
+    by (simp add: field_simps add: power_add)
+  also have "\<dots> = (\<Sum>i. (1/3::real)^i) * (1/3::real)^n"
+    by (rule suminf_mult2[symmetric, OF summable_geometric]) simp
+  also have "\<dots> = 1 / (1 - 1 / 3) * (1 / 3) ^ n"
+    by (simp add: suminf_geometric) 
+  also have "\<dots> \<le> 3 *  (1 / 3) ^ n" by (simp add: field_simps)
+  finally show ?thesis.
+qed
+
+
 subsubsection {* Injectivity *}
 
 lemma to_real_inj_aux:
@@ -516,51 +564,6 @@ next
   show ?case by (metis less_antisym)
 qed
 
-lemma n_ary_series_diff:
-  shows "\<bar>n_ary_series a k - n_ary_series b k\<bar> \<le> (1/3)^k"
-proof-
-  have "\<bar>n_ary_series a k - n_ary_series b k\<bar> = \<bar>real (a k mod 3) - real(b k mod 3)\<bar> * (1 / 3) ^ Suc k"
-    unfolding n_ary_series_def by (auto simp add: field_simps)
-  also
-   have "\<bar>real (a k mod 3)\<bar> < 3" and  "\<bar>real (b k mod 3)\<bar> < 3" by auto
-  hence "\<bar>real (a k mod 3) - real(b k mod 3)\<bar> \<le> 3" by auto
-  also have "(3::real) * (1 / 3) ^ Suc k = (1/3)^k" by (simp add: power_Suc field_simps)
-  finally show ?thesis by this auto
-qed
-
-lemma to_real_cont:
-  assumes "\<forall>j<n. a j = b j"
-  shows "\<bar>to_real a - to_real b\<bar> \<le> 3 * (1 / 3) ^ n"
-proof-
-  note sm' = summable_diff[OF n_ary_summable n_ary_summable]
-  have sm''': "summable (\<lambda>i. ((1 / 3)::real) ^ i)" by (rule summable_geometric) simp
-  hence sm''': "summable (\<lambda>i.  (1/3 :: real) ^ (i + n))" by (metis summable_iff_shift[where k = n])
-  hence sm'': "summable (\<lambda>i. \<bar>n_ary_series a (i + n) - n_ary_series b (i + n)\<bar>)"
-    apply (rule summable_rabs_comparison_test[rotated])
-    using n_ary_series_diff
-    apply auto
-    done
-
-  have "\<bar>to_real a - to_real b\<bar> = \<bar>(\<Sum>i. n_ary_series a i - n_ary_series b i)\<bar>"
-    unfolding to_real_def by (rule arg_cong[OF suminf_diff[OF n_ary_summable n_ary_summable]])
-  also have "\<dots> = \<bar>(\<Sum>i. n_ary_series a (i + n) - n_ary_series b (i + n)) + setsum (\<lambda> i. n_ary_series a i - n_ary_series b i) {..<n}\<bar>"
-    by (rule arg_cong[OF suminf_split_initial_segment[OF sm']])
-  also have "\<dots> = \<bar>(\<Sum>i. n_ary_series a (i + n) - n_ary_series b (i + n))\<bar>"
-    using assms(1) by (auto simp add: n_ary_series_def)
-  also have "\<dots> \<le> (\<Sum>i. \<bar>n_ary_series a (i + n) - n_ary_series b (i + n)\<bar>)"
-    by (rule summable_rabs[OF sm''])
-  also have "\<dots> \<le> (\<Sum>i. (1/3::real)^(i + n))"
-    by (intro suminf_le[OF _ sm'' sm'''] allI n_ary_series_diff)
-  also have "\<dots> = (\<Sum>i. (1/3::real)^i * (1/3::real)^n)"
-    by (simp add: field_simps add: power_add)
-  also have "\<dots> = (\<Sum>i. (1/3::real)^i) * (1/3::real)^n"
-    by (rule suminf_mult2[symmetric, OF summable_geometric]) simp
-  also have "\<dots> = 1 / (1 - 1 / 3) * (1 / 3) ^ n"
-    by (simp add: suminf_geometric) 
-  also have "\<dots> \<le> 3 *  (1 / 3) ^ n" by (simp add: field_simps)
-  finally show ?thesis.
-qed
-
 theorem to_real_surj: "to_real ` r_cantor = cantor"
 proof
   show "to_real` r_cantor \<subseteq> cantor"
@@ -595,16 +598,10 @@ next
     proof(rule bounded_0_inverse)
       fix n
       show "0 \<le> \<bar>to_real f' - to_real (f n)\<bar>" by simp
-    next
-      fix n :: nat
-      
       have "\<forall>j<n. f' j = f n j"  by (auto simp add: f'_def *)
-      then
-      show "\<bar>to_real f' - to_real (f n)\<bar> \<le> 3* (1/3)^n" by (rule to_real_cont)
+      thus "\<bar>to_real f' - to_real (f n)\<bar> \<le> 3* (1/3)^n" by (rule to_real_cont)
     next
-      show "1/3 < (1::real)" by auto
-    next
-      show "0 < (3::real)" by auto
+      show "1/3 < (1::real)" and "0 < (3::real)" by auto
     qed
     hence "(\<lambda> n. to_real f' - to_real (f n)) ----> 0" by (rule tendsto_rabs_zero_cancel)
     hence "(\<lambda> n. to_real f' - x) ----> 0" unfolding f(2)[symmetric].
