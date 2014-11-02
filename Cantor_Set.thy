@@ -624,51 +624,59 @@ abbreviation "from_real \<equiv> the_inv_into r_cantor to_real"
 definition "fill_1 f i \<equiv> f (2 * i)"
 definition "fill_2 f i \<equiv> f (2 * i + 1)"
 
+definition combine :: "(nat \<Rightarrow> nat) \<Rightarrow> (nat \<Rightarrow> nat) \<Rightarrow> (nat \<Rightarrow> nat)"
+  where "combine f g i = (if 2 dvd i then f (i div 2) else g ((i - 1) div 2))"
+
+lemma combine_fill1_fill2:
+  "combine (fill_1 f) (fill_2 f) = f"
+proof
+  fix i  :: nat
+  show "combine (fill_1 f) (fill_2 f) i = f i"
+  proof(cases "2 dvd i")
+  case True
+    hence "2 * (i div 2) = i" by (rule dvd_mult_div_cancel)
+    thus ?thesis
+    using True unfolding fill_1_def fill_2_def combine_def by simp
+  next
+  case False
+    hence "2 * ((i - 1) div 2) + 1 = i" by arith
+    thus ?thesis
+    using False unfolding fill_1_def fill_2_def combine_def by simp
+  qed
+qed
+
+
 definition fill :: "real \<Rightarrow> real \<times> real" where
   "fill x \<equiv> (to_real (fill_1 (from_real x)), to_real (fill_2 (from_real x)))"
 
-lemma[simp]: "f \<in> r_cantor \<Longrightarrow> fill_1 f \<in> r_cantor"
+definition unfill :: "(real \<times> real) \<Rightarrow> real" where
+  "unfill p \<equiv> to_real (combine (from_real (fst p)) (from_real (snd p)))"
+
+
+lemma fill_1_r_cantor: "f \<in> r_cantor \<Longrightarrow> fill_1 f \<in> r_cantor"
     unfolding r_cantor_zero_or_two by (auto simp add: fill_1_def)
-lemma[simp]: "f \<in> r_cantor \<Longrightarrow> fill_2 f \<in> r_cantor"
+lemma fill_2_r_cantor: "f \<in> r_cantor \<Longrightarrow> fill_2 f \<in> r_cantor"
     unfolding r_cantor_zero_or_two by (auto simp add: fill_2_def)
 
-lemma fill_inj: "inj_on fill cantor"
-proof (rule inj_onI)
-  fix x y
-  let ?a = "from_real x"
-  let ?b = "from_real y"
-  assume "x \<in> cantor" "y \<in> cantor" 
-  hence[simp]: "?a \<in> r_cantor" "?b \<in> r_cantor" and xy: "x = to_real ?a" "y = to_real ?b"
-    using the_inv_into_into[OF to_real_inj] f_the_inv_into_f[OF to_real_inj] to_real_surj by auto
 
-  assume asm: "fill x = fill y"
-  hence "to_real (fill_1 ?a) = to_real (fill_1 ?b)" by (simp add:fill_def)
-  hence fill_1: "fill_1 ?a = fill_1 ?b" by (rule inj_onD[OF to_real_inj], simp_all)
-
-  from asm have "to_real (fill_2 ?a) = to_real (fill_2 ?b)" by (simp add:fill_def)
-  hence fill_2: "fill_2 ?a = fill_2 ?b"
-    by (rule inj_onD[OF to_real_inj], auto)
-  
-  have "?a = ?b"
-  proof
-    fix i
-    show "?a i = ?b i"
-    proof (cases "i mod 2 = 0")
-      case True
-      hence "?a i = fill_1 ?a (i div 2)" by (auto simp:fill_1_def)
-      moreover have "fill_1 ?b (i div 2) = ?b i" using True by (auto simp:fill_1_def)
-      ultimately show ?thesis by (simp add:fill_1)
-    next
-      case False
-      hence "i > 0" by simp
-      with False have 1: "(i - 1) mod 2 = 0" by (metis `0 < i` even_def even_num_iff)
-      hence "?a i = (fill_2 ?a) ((i - 1) div 2)" by (simp add:fill_2_def mult_div_cancel `i > 0`)
-      moreover have "(fill_2 ?b) ((i - 1) div 2) = ?b i" using 1 by (simp add:fill_2_def mult_div_cancel `i > 0`)
-      ultimately show ?thesis by (simp add:fill_2)
-    qed
-  qed
-  thus "x = y" using xy by simp
+lemma unfill_fill:
+  assumes "x \<in> cantor"
+  shows "unfill (fill x) = x"
+proof-
+  from assms
+  have "from_real x \<in> r_cantor"
+    by (metis order_refl the_inv_into_into to_real_inj to_real_surj)
+  moreover
+  note fill_1_r_cantor[OF this] fill_2_r_cantor[OF this]
+  ultimately
+  show ?thesis
+    unfolding unfill_def fill_def
+    by (simp add: the_inv_into_f_f[OF to_real_inj] combine_fill1_fill2
+                  f_the_inv_into_f[OF to_real_inj] to_real_surj assms)
 qed
+
+lemma fill_inj: "inj_on fill cantor"
+  using unfill_fill by (metis inj_on_def)
 
 theorem "homeomorphism fill cantor (cantor \<times> cantor)"
   apply (simp add:homeomorphism_def bij_betw_def fill_inj)
