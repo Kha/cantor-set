@@ -673,25 +673,21 @@ proof-
   from assms
   have "from_real x \<in> r_cantor"
     by (metis order_refl the_inv_into_into to_real_inj to_real_surj)
-  moreover
-  note fill_1_r_cantor[OF this] fill_2_r_cantor[OF this]
-  ultimately
+  from fill_1_r_cantor[OF this] fill_2_r_cantor[OF this]
   show ?thesis
     unfolding unfill_def fill_def
     by (simp add: the_inv_into_f_f[OF to_real_inj] combine_fill1_fill2
                   f_the_inv_into_f[OF to_real_inj] to_real_surj assms)
 qed
 
-lemma full_unfill:
+lemma fill_unfill:
   assumes "x \<in> cantor" and "y \<in> cantor"
   shows "fill (unfill (x,y)) = (x,y)"
 proof-
   from assms
   have "from_real x \<in> r_cantor" "from_real y \<in> r_cantor"
     by (metis order_refl the_inv_into_into to_real_inj to_real_surj)+
-  moreover
-  note combine_r_cantor[OF this]
-  ultimately
+  from combine_r_cantor[OF this]
   show ?thesis
     unfolding unfill_def fill_def
     by (simp add: the_inv_into_f_f[OF to_real_inj] fill_1_combine fill_2_combine
